@@ -1,0 +1,11 @@
+# Python runtime for YOLOv8-Seg + evaluation/data tooling.
+# PyTorch is installed separately from the CUDA 12.8 wheel index.
+ultralytics==8.4.115
+evo==1.37.0
+rosbags==0.11.3
+numpy<2.3
+scipy
+matplotlib
+pyyaml
+opencv-python==5.0.0.93
+tqdm

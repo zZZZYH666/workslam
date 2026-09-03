@@ -1,0 +1,41 @@
+# Build products and generated binaries
+build/
+third_party/ORB_SLAM3/build/
+third_party/ORB_SLAM3/Thirdparty/*/build/
+third_party/ORB_SLAM3/lib/
+third_party/ORB_SLAM3/Examples/*/*
+!third_party/ORB_SLAM3/Examples/**/*.cc
+!third_party/ORB_SLAM3/Examples/**/*.cpp
+!third_party/ORB_SLAM3/Examples/**/*.h
+!third_party/ORB_SLAM3/Examples/**/*.yaml
+third_party/ORB_SLAM3/Examples_old/
+third_party/ORB_SLAM3/Examples/**/*.txt
+third_party/ORB_SLAM3/Examples/**/TUM_IMU/
+third_party/Pangolin/build/
+*.o
+*.so
+
+# Large or reproducible external assets
+data/
+downloads/
+results/
+third_party/ORB_SLAM3/Vocabulary/
+
+# Local environments and caches
+.venv*/
+.local/
+.pytest_cache/
+__pycache__/
+
+# Local test output
+*.log
+semantic_fallback_test_summary.csv
+
+# Large training/archive artifacts
+yolo_workspace.zip
+YOLO/yolo_workspace/train_my/
+YOLO/yolo_workspace/models/
+YOLO/yolo_workspace/runs/
+YOLO/yolo_workspace/workspace/
+YOLO/yolo_workspace/yolov8_seg_dataset/
+YOLO/yolo_workspace/fae4e-main.zip
