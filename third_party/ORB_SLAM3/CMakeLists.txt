@@ -190,6 +190,11 @@ add_executable(semantic_fallback_unit_test
 target_link_libraries(semantic_fallback_unit_test ${PROJECT_NAME})
 add_test(NAME semantic_fallback_unit_test COMMAND semantic_fallback_unit_test)
 
+add_executable(semantic_mappoint_lifecycle_test
+        ../../tests/test_semantic_mappoint_lifecycle.cc)
+target_link_libraries(semantic_mappoint_lifecycle_test ${PROJECT_NAME})
+add_test(NAME semantic_mappoint_lifecycle_test COMMAND semantic_mappoint_lifecycle_test)
+
 if(realsense2_FOUND)
     add_executable(stereo_realsense_t265
             Examples/Stereo/stereo_realsense_t265.cc)
