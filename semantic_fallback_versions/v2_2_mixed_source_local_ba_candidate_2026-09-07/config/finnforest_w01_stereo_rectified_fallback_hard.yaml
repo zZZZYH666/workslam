@@ -1,0 +1,64 @@
+%YAML:1.0
+
+File.version: "1.0"
+Camera.type: "Rectified"
+Camera1.fx: 1056.9601548342
+Camera1.fy: 1056.9601548342
+Camera1.cx: 953.940674
+Camera1.cy: 595.260834
+Camera2.fx: 1056.9601548342
+Camera2.fy: 1056.9601548342
+Camera2.cx: 953.940674
+Camera2.cy: 595.260834
+Camera.width: 2013
+Camera.height: 1195
+Camera.fps: 13
+Camera.RGB: 0
+Stereo.b: 0.200457921
+Stereo.ThDepth: 60.0
+
+ORBextractor.nFeatures: 2000
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+Semantic.EnableFallback: 1
+Semantic.TargetFeatures: 1000
+Semantic.MinStaticFeatures: 300
+Semantic.MinStereoMatches: 80
+Semantic.MinTrackingInliers: 50
+Semantic.MinGridCoverage: 0.15
+Semantic.MaxFallbackRatio: 0.50
+Semantic.EnableMapPointPromotion: 0
+Semantic.PromotionMinVisibleFrames: 5
+Semantic.PromotionMinKeyFrames: 2
+Semantic.PromotionMinMatchRatio: 0.60
+Semantic.PromotionMaxReprojectionError: 2.0
+Semantic.PromotionMinStaticRatio: 0.70
+Semantic.ProvisionalMaxAgeKeyFrames: 8
+Semantic.ProvisionalMaxDynamicObservations: 2
+Semantic.EnableProvisionalLoopSupport: 0
+Semantic.ProvisionalLoopMinVisibleFrames: 5
+Semantic.ProvisionalLoopMinKeyFrames: 2
+Semantic.ProvisionalLoopMinMatchRatio: 0.60
+Semantic.ProvisionalLoopMaxAgeKeyFrames: 8
+Semantic.ProvisionalLoopMaxDynamicObservations: 0
+Semantic.ProvisionalLoopMinTrustedInliers: 15
+Semantic.ProvisionalLoopMaxFraction: 0.30
+Semantic.EnableSoftSelection: 0
+Semantic.StaticFeatureWeight: 1.0
+Semantic.FallbackFeatureWeight: 0.4
+Semantic.MinFeatureWeight: 0.10
+
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500.0
+Viewer.imageViewScale: 1.0

@@ -30,8 +30,6 @@ long unsigned int MapPoint::nNextId=0;
 unsigned long MapPoint::nSemanticPromoted=0;
 unsigned long MapPoint::nSemanticRejected=0;
 mutex MapPoint::mGlobalMutex;
-std::mutex MapPoint::mSemanticEventMutex;
-std::vector<MapPoint::SemanticLifecycleEvent> MapPoint::mSemanticLifecycleEvents;
 
 static void InitSemanticState(MapPoint *p)
 {
@@ -44,21 +42,15 @@ static void InitSemanticState(MapPoint *p)
     p->mnSemanticDynamicObservations = 0;
     p->mnSemanticKeyFrameObservations = 0;
     p->mfSemanticReprojectionErrorSum = 0.0f;
-    p->mnSemanticValidReprojectionObservations = 0;
     p->mnSemanticLastFrameSeen = 0;
-    p->mnSemanticLastMatchedFrame = -1;
     p->mnSemanticLastKeyFrameId = 0;
-    p->mbSemanticHasLastVisibleFrame = false;
-    p->mbSemanticHasLastMatchedFrame = false;
-    p->mSemanticKeyFrameSourceMask.clear();
 }
 
 MapPoint::MapPoint():
     mnFirstKFid(0), mnFirstFrame(0), nObs(0), mnTrackReferenceForFrame(0),
     mnLastFrameSeen(0), mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
     mnCorrectedReference(0), mnBAGlobalForKF(0), mnVisible(1), mnFound(1), mbBad(false),
-    mpReplaced(static_cast<MapPoint*>(NULL)), mpRefKF(static_cast<KeyFrame*>(NULL)),
-    mpMap(static_cast<Map*>(NULL)), mnOriginMapId(0)
+    mpReplaced(static_cast<MapPoint*>(NULL))
 {
     mpReplaced = static_cast<MapPoint*>(NULL);
     InitSemanticState(this);
@@ -600,113 +592,38 @@ void MapPoint::SetSemanticState(SemanticMapPointState state) { mSemanticState = 
 
 void MapPoint::Promote()
 {
-    if(IsProvisional())
-    {
-        const int oldState = mSemanticState;
-        mSemanticState = static_cast<int>(SemanticMapPointState::PROMOTED);
-        ++nSemanticPromoted;
-        SemanticLifecycleEvent event;
-        event.frameId = mnSemanticLastFrameSeen;
-        event.keyframeId = mnSemanticLastKeyFrameId;
-        event.mapId = mpMap ? mpMap->GetId() : 0;
-        event.mapPointId = mnId;
-        event.oldState = oldState;
-        event.newState = mSemanticState;
-        event.reason = "promotion";
-        event.visibleFrames = mnSemanticVisibleFrames;
-        event.matchedFrames = mnSemanticMatchedFrames;
-        event.matchRatio = SemanticMatchRatio();
-        event.keyframeObservations = mnSemanticKeyFrameObservations;
-        event.staticRatio = SemanticStaticRatio();
-        event.meanReprojectionError = SemanticMeanReprojectionError();
-        event.validReprojectionObservations = mnSemanticValidReprojectionObservations;
-        std::lock_guard<std::mutex> lock(mSemanticEventMutex);
-        mSemanticLifecycleEvents.push_back(event);
-    }
+    if(IsProvisional()) { mSemanticState = static_cast<int>(SemanticMapPointState::PROMOTED); ++nSemanticPromoted; }
 }
 
-void MapPoint::Reject(const std::string &reason)
+void MapPoint::Reject()
 {
     if(!isBad() && mSemanticState != static_cast<int>(SemanticMapPointState::REJECTED)) {
-        const int oldState = mSemanticState;
         mSemanticState = static_cast<int>(SemanticMapPointState::REJECTED); ++nSemanticRejected;
-        SemanticLifecycleEvent event;
-        event.frameId = mnSemanticLastFrameSeen;
-        event.keyframeId = mnSemanticLastKeyFrameId;
-        event.mapId = mpMap ? mpMap->GetId() : 0;
-        event.mapPointId = mnId;
-        event.oldState = oldState;
-        event.newState = mSemanticState;
-        event.reason = reason;
-        event.visibleFrames = mnSemanticVisibleFrames;
-        event.matchedFrames = mnSemanticMatchedFrames;
-        event.matchRatio = SemanticMatchRatio();
-        event.keyframeObservations = mnSemanticKeyFrameObservations;
-        event.staticRatio = SemanticStaticRatio();
-        event.meanReprojectionError = SemanticMeanReprojectionError();
-        event.validReprojectionObservations = mnSemanticValidReprojectionObservations;
-        std::lock_guard<std::mutex> lock(mSemanticEventMutex);
-        mSemanticLifecycleEvents.push_back(event);
     }
 }
 
-void MapPoint::RegisterSemanticVisibility(long long frameId)
+void MapPoint::RegisterSemanticVisibility()
 {
     if(!IsProvisional()) return;
-    if(frameId >= 0)
-    {
-        if(mbSemanticHasLastVisibleFrame && mnSemanticLastFrameSeen == static_cast<unsigned long>(frameId))
-            return;
-        mnSemanticLastFrameSeen = static_cast<unsigned long>(frameId);
-        mbSemanticHasLastVisibleFrame = true;
-    }
     ++mnSemanticVisibleFrames;
     ++mnSemanticConsecutiveVisibleFrames;
 }
 
-void MapPoint::RegisterSemanticMatch(bool staticObservation, float reprojectionError,
-                                     bool reprojectionValid, long long frameId)
+void MapPoint::RegisterSemanticMatch(bool staticObservation, float reprojectionError)
 {
     if(!IsProvisional()) return;
-    if(frameId >= 0)
-    {
-        if(mbSemanticHasLastMatchedFrame && mnSemanticLastMatchedFrame == frameId)
-            return;
-        mnSemanticLastMatchedFrame = frameId;
-        mbSemanticHasLastMatchedFrame = true;
-    }
     ++mnSemanticMatchedFrames;
-    if(std::isfinite(reprojectionError) && reprojectionValid)
-    {
-        mfSemanticReprojectionErrorSum += std::max(0.0f, reprojectionError);
-        ++mnSemanticValidReprojectionObservations;
-    }
+    if(staticObservation) ++mnSemanticStaticObservations;
+    else ++mnSemanticUnknownObservations;
+    if(std::isfinite(reprojectionError)) mfSemanticReprojectionErrorSum += std::max(0.0f, reprojectionError);
 }
 
 void MapPoint::RegisterSemanticKeyFrameObservation(unsigned long keyframeId, bool staticObservation)
 {
     if(!IsProvisional()) return;
-    const unsigned char sourceBit = staticObservation ? 0x1u : 0x2u;
-    unsigned char &sourceMask = mSemanticKeyFrameSourceMask[keyframeId];
-    if(sourceMask == 0)
-    {
-        ++mnSemanticKeyFrameObservations;
-        mnSemanticLastKeyFrameId = keyframeId;
-        if(staticObservation)
-            ++mnSemanticStaticObservations;
-        else
-            ++mnSemanticUnknownObservations;
-    }
-    else if(staticObservation && (sourceMask & 0x1u) == 0)
-    {
-        // A mixed stereo observation has static evidence in at least one eye.
-        // Upgrade this keyframe from unknown support to static support rather
-        // than counting the two eyes as independent Bernoulli trials.
-        if((sourceMask & 0x2u) != 0 && mnSemanticUnknownObservations > 0)
-            --mnSemanticUnknownObservations;
-        ++mnSemanticStaticObservations;
-    }
-    sourceMask = static_cast<unsigned char>(sourceMask | sourceBit);
+    if(mnSemanticLastKeyFrameId != keyframeId) { ++mnSemanticKeyFrameObservations; mnSemanticLastKeyFrameId = keyframeId; }
+    if(staticObservation) ++mnSemanticStaticObservations;
+    else ++mnSemanticUnknownObservations;
 }
 
 float MapPoint::SemanticMatchRatio() const
@@ -717,13 +634,12 @@ float MapPoint::SemanticStaticRatio() const
     return total > 0 ? static_cast<float>(mnSemanticStaticObservations) / total : 0.0f;
 }
 float MapPoint::SemanticMeanReprojectionError() const
-{ return mnSemanticValidReprojectionObservations > 0 ? mfSemanticReprojectionErrorSum / mnSemanticValidReprojectionObservations : std::numeric_limits<float>::infinity(); }
+{ return mnSemanticMatchedFrames > 0 ? mfSemanticReprojectionErrorSum / mnSemanticMatchedFrames : std::numeric_limits<float>::infinity(); }
 
 bool MapPoint::CanPromote(const SemanticPromotionConfig &config) const
 {
     return IsProvisional() && mnSemanticVisibleFrames >= config.minVisibleFrames &&
         mnSemanticKeyFrameObservations >= config.minKeyFrames && SemanticMatchRatio() >= config.minMatchRatio &&
-        mnSemanticValidReprojectionObservations > 0 &&
         SemanticMeanReprojectionError() <= config.maxReprojectionError && SemanticStaticRatio() >= config.minStaticRatio &&
         mnSemanticDynamicObservations <= config.maxDynamicObservations;
 }
@@ -733,48 +649,6 @@ bool MapPoint::ShouldReject(const SemanticPromotionConfig &config) const
     if(!IsProvisional()) return false;
     if(mnSemanticDynamicObservations > config.maxDynamicObservations) return true;
     return mnSemanticVisibleFrames >= config.minVisibleFrames && SemanticMatchRatio() < config.minMatchRatio;
-}
-
-bool MapPoint::IsLoopEligible(const SemanticPromotionConfig &config, unsigned long currentKeyFrameId) const
-{
-    if(!IsProvisional() || mbBad) return false;
-    if(mnSemanticVisibleFrames < config.minVisibleFrames ||
-       mnSemanticKeyFrameObservations < config.minKeyFrames ||
-       SemanticMatchRatio() < config.minMatchRatio ||
-       mnSemanticDynamicObservations > 0)
-        return false;
-    if(mnSemanticValidReprojectionObservations > 0 &&
-       SemanticMeanReprojectionError() > config.maxReprojectionError)
-        return false;
-    if(currentKeyFrameId > 0 && currentKeyFrameId >= mnSemanticLastKeyFrameId)
-    {
-        const unsigned long inactivity = currentKeyFrameId - mnSemanticLastKeyFrameId;
-        if(inactivity > static_cast<unsigned long>(config.maxAgeKeyFrames)) return false;
-    }
-    return true;
-}
-
-std::vector<MapPoint::SemanticLifecycleEvent> MapPoint::GetSemanticLifecycleEvents()
-{
-    std::lock_guard<std::mutex> lock(mSemanticEventMutex);
-    return mSemanticLifecycleEvents;
-}
-
-std::vector<MapPoint::SemanticLifecycleEvent> MapPoint::GetSemanticLifecycleEventsSince(size_t startIndex)
-{
-    std::lock_guard<std::mutex> lock(mSemanticEventMutex);
-    if(startIndex >= mSemanticLifecycleEvents.size())
-        return {};
-    return std::vector<SemanticLifecycleEvent>(mSemanticLifecycleEvents.begin() + static_cast<std::ptrdiff_t>(startIndex),
-                                               mSemanticLifecycleEvents.end());
-}
-
-void MapPoint::ClearSemanticLifecycleEvents()
-{
-    std::lock_guard<std::mutex> lock(mSemanticEventMutex);
-    mSemanticLifecycleEvents.clear();
-    nSemanticPromoted = 0;
-    nSemanticRejected = 0;
 }
 
 Map* MapPoint::GetMap()
