@@ -12,6 +12,7 @@
 | PyTorch | 2.9.1+cu128，CUDA 可用 |
 | torchvision | 0.24.1+cu128 |
 | Ultralytics | 8.4.115 |
+| 当前实验权重 | `YOLO/yolo_workspace/train_my/runs/segment/yolov8s-seg-base/weights/best.pt`（23,950,317 bytes） |
 | Python OpenCV | 5.0.0 |
 | C++ OpenCV | 4.5.4 |
 | evo / rosbags | 1.37.0 / 0.11.3 |
@@ -55,7 +56,7 @@ cd /root/workSLAM
 ├── .venv-finnforest/
 ├── .local/
 ├── data/                 # 等待上传 FinnForest 数据
-├── YOLO/                 # 等待上传用户工程和权重
+├── YOLO/                 # 当前实验 best.pt 已由 Git 跟踪，其他训练产物未纳入
 ├── configs/
 ├── downloads/            # 固定版本源码归档
 ├── infra/                # 安装、构建、环境和验收脚本
@@ -71,13 +72,17 @@ cd /root/workSLAM
 
 - FinnForest：至少 `W01_13Hz`，正式调参还需要 `S03/W03`；W01 是测试集，不能用于选阈值。
 - `AllGroundTruths_and_Calibration.zip`、`toolkit.zip` 和需要使用的 ROS bag 数据。
-- 用户 YOLO 工程或至少 `yolo_seg_fin3/weights/best.pt`。
+
+当前实验权重已纳入 Git，SHA-256 为：
+
+```text
+727e6cb512dba9699f199f33aff11b66eb306ab198d696feece2b2377fb47e63
+```
 
 推荐目标位置：
 
 ```text
 /root/workSLAM/data/W01_13Hz
-/root/workSLAM/YOLO
 ```
 
 数据上传后先检查左右目帧数、零字节文件、时间戳和标定文件，再生成 FinnForest 的 ORB-SLAM3 双目配置。标定外参、左右目顺序、平移符号和毫米/米单位必须通过立体几何验证，不能直接照抄 YAML。
