@@ -25,7 +25,13 @@ if [[ ! -f "$root/third_party/Pangolin/CMakeLists.txt" ]]; then
   mkdir -p "$root/third_party/Pangolin"
   tar -xzf "$pangolin_archive" --strip-components=1 -C "$root/third_party/Pangolin"
 fi
-if [[ ! -f "$root/third_party/ORB_SLAM3/CMakeLists.txt" ]]; then
+
+# The repository tracks the project-specific ORB-SLAM3 overlay.  A fresh clone
+# therefore already has CMakeLists.txt, but still needs the pinned upstream
+# assets and any untracked support files.  Extract with --skip-old-files so the
+# overlay is preserved while missing upstream files are restored.
+if [[ ! -f "$root/third_party/ORB_SLAM3/Vocabulary/ORBvoc.txt.tar.gz" ||
+      ! -f "$root/third_party/ORB_SLAM3/Examples/Monocular/mono_euroc.cc" ]]; then
   mkdir -p "$root/third_party/ORB_SLAM3"
-  tar -xzf "$orb_archive" --strip-components=1 -C "$root/third_party/ORB_SLAM3"
+  tar --skip-old-files -xzf "$orb_archive" --strip-components=1 -C "$root/third_party/ORB_SLAM3"
 fi
