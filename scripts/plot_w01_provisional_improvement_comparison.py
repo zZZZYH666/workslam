@@ -22,15 +22,15 @@ import evaluate_w01_full_accuracy_performance as ev
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "results/result/w01_provisional_improvement_repeat5_2026-09-05/prefix7254_comparison"
+OUT = ROOT / "results/result/2026-09-05_w01_provisional_improvement_repeat5/prefix7254_comparison"
 FRAME_LIMIT = 7253
 START, END = 5000, 6500
 
 PATHS = {
-    "baseline": ROOT / "results/result/w01_pre_rebuild_full_evaluation_2026-09-01/baseline/CameraTrajectory_baseline.txt",
-    "adaptive_fallback": ROOT / "results/result/w01_pre_rebuild_full_evaluation_2026-09-01/adaptive_fallback/CameraTrajectory_semantic.txt",
-    "provisional": ROOT / "results/result/w01_full_validation_fixed_2026-09-04/provisional/CameraTrajectory_semantic.txt",
-    "provisional_ape_fix": ROOT / "results/result/w01_provisional_improvement_repeat5_2026-09-05/w01_semantic_fallback_repeat5_improved_fixed2/run_01/CameraTrajectory_semantic.txt",
+    "baseline": ROOT / "results/result/2026-09-01_w01_pre_rebuild_full_evaluation/baseline/CameraTrajectory_baseline.txt",
+    "adaptive_fallback": ROOT / "results/result/2026-09-01_w01_pre_rebuild_full_evaluation/adaptive_fallback/CameraTrajectory_semantic.txt",
+    "provisional": ROOT / "results/result/2026-09-04_w01_full_validation_fixed/provisional/CameraTrajectory_semantic.txt",
+    "provisional_ape_fix": ROOT / "results/result/2026-09-05_w01_provisional_improvement_repeat5/w01_semantic_fallback_repeat5_improved_fixed2/run_01/CameraTrajectory_semantic.txt",
 }
 LABELS = {
     "baseline": "Baseline ORB-SLAM3",
@@ -199,7 +199,7 @@ def save_interval_ape(errors, common):
 
 
 def save_backend_diagnostics():
-    run = ROOT / "results/result/w01_provisional_improvement_repeat5_2026-09-05/w01_semantic_fallback_repeat5_improved_fixed2/run_01"
+    run = ROOT / "results/result/2026-09-05_w01_provisional_improvement_repeat5/w01_semantic_fallback_repeat5_improved_fixed2/run_01"
     path = run / "backend_interval_stats.csv"
     if not path.exists():
         return

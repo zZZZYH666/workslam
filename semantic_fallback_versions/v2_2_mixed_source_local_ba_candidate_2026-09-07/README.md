@@ -41,7 +41,7 @@ B+C 完整运行统计为 9169 帧 `OK`、40 帧 `RECENTLY_LOST`、1 帧
 `NO_IMAGES_YET`。完整逐步测试结论保存在 `validation/逐步修复测试报告.md`，原始
 运行产物位于：
 
-`results/result/w01_provisional_improvement_repeat5_2026-09-06/`
+`results/result/2026-09-06_w01_provisional_improvement_repeat5/`
 
 构建及逻辑测试结果：
 

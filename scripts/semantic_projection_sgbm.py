@@ -437,7 +437,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", default="data/W01_13Hz")
     parser.add_argument("--model", default="YOLO/yolo_workspace/train_my/runs/segment/yolov8s-seg-base/weights/best.pt")
-    parser.add_argument("--output", default="results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04")
+    parser.add_argument("--output", default="results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks")
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--end", type=int, default=9210)
     parser.add_argument("--batch-size", type=int, default=4)

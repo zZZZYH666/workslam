@@ -14,13 +14,13 @@ import evaluate_w01_full_accuracy_performance as ev
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "results/result/w01_prefix7254_accuracy_comparison_2026-09-04"
+OUT = ROOT / "results/result/2026-09-04_w01_prefix7254_accuracy_comparison"
 FRAME_LIMIT = 7253
 
 PATHS = {
-    "baseline": ROOT / "results/result/w01_pre_rebuild_full_evaluation_2026-09-01/baseline/CameraTrajectory_baseline.txt",
-    "adaptive_fallback": ROOT / "results/result/w01_pre_rebuild_full_evaluation_2026-09-01/adaptive_fallback/CameraTrajectory_semantic.txt",
-    "provisional": ROOT / "results/result/w01_full_validation_fixed_2026-09-04/provisional/CameraTrajectory_semantic.txt",
+    "baseline": ROOT / "results/result/2026-09-01_w01_pre_rebuild_full_evaluation/baseline/CameraTrajectory_baseline.txt",
+    "adaptive_fallback": ROOT / "results/result/2026-09-01_w01_pre_rebuild_full_evaluation/adaptive_fallback/CameraTrajectory_semantic.txt",
+    "provisional": ROOT / "results/result/2026-09-04_w01_full_validation_fixed/provisional/CameraTrajectory_semantic.txt",
 }
 LABELS = {
     "baseline": "Baseline ORB-SLAM3",

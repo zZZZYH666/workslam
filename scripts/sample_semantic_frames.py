@@ -34,9 +34,9 @@ def add_title(image: np.ndarray, title: str) -> np.ndarray:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--input", default="results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04")
+    p.add_argument("--input", default="results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks")
     p.add_argument("--dataset", default="data/W01_13Hz")
-    p.add_argument("--output", default="results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/sample_frames")
+    p.add_argument("--output", default="results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks/sample_frames")
     p.add_argument("--count", type=int, default=20)
     p.add_argument("--seed", type=int, default=20260831)
     p.add_argument("--scale", type=float, default=0.5)

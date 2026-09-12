@@ -42,7 +42,7 @@ python scripts/semantic_projection_sgbm.py
 ```text
 data/W01_13Hz
 YOLO/yolo_workspace/train_my/runs/segment/yolov8s-seg-base/weights/best.pt
-results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04
+results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks
 ```
 
 ### 常用参数
@@ -121,10 +121,10 @@ source infra/env.sh
 python scripts/sample_semantic_frames.py
 ```
 
-默认从 `w01_semantic_projection_sgbm_full_masks_2026-09-04` 抽取 20 帧，输出到：
+默认从 `2026-09-04_w01_semantic_projection_sgbm_full_masks` 抽取 20 帧，输出到：
 
 ```text
-results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/sample_frames
+results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks/sample_frames
 ```
 
 随机种子默认为 `20260831`，因此同一输入目录下可以复现相同的抽样帧。调整抽样数量或随机种子：
@@ -133,8 +133,8 @@ results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/sample_frames
 python scripts/sample_semantic_frames.py \
   --count 20 \
   --seed 20260831 \
-  --input results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04 \
-  --output results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/sample_frames
+  --input results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks \
+  --output results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks/sample_frames
 ```
 
 脚本同时生成 `sampled_indices.csv`，记录抽样顺序、原始帧号和随机种子。
@@ -159,7 +159,7 @@ pytest -q tests/test_semantic_projection_sgbm.py
 
 当前完整实验的说明见：
 
-- [`../results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/实验总结.md`](../results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/实验总结.md)
-- [`../results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/report.md`](../results/result/w01_semantic_projection_sgbm_full_masks_2026-09-04/report.md)
+- [`../results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks/实验总结.md`](../results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks/实验总结.md)
+- [`../results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks/report.md`](../results/result/2026-09-04_w01_semantic_projection_sgbm_full_masks/report.md)
 
 正式实验使用 9210 帧 W01 数据，模型和参数以输出目录中的 `metadata.json`、`config.json` 为准。

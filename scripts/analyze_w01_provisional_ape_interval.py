@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import evaluate_w01_full_accuracy_performance as ev
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "results/result/w01_prefix7254_accuracy_comparison_2026-09-04"
+OUT = ROOT / "results/result/2026-09-04_w01_prefix7254_accuracy_comparison"
 LAST = 7253
 START, END = 5000, 6500
 
@@ -22,9 +22,9 @@ def main():
     timestamps = ev.load_timestamps(ROOT / "data/W01_13Hz/timestampSecNanoSec_W01.txt", LAST + 1)
     gt_all = ev.load_groundtruth(ROOT / "data/W01_13Hz/GT_W01.txt", LAST + 1)
     paths = {
-        "baseline": ROOT / "results/result/w01_pre_rebuild_full_evaluation_2026-09-01/baseline/CameraTrajectory_baseline.txt",
-        "adaptive_fallback": ROOT / "results/result/w01_pre_rebuild_full_evaluation_2026-09-01/adaptive_fallback/CameraTrajectory_semantic.txt",
-        "provisional": ROOT / "results/result/w01_full_validation_fixed_2026-09-04/provisional/CameraTrajectory_semantic.txt",
+        "baseline": ROOT / "results/result/2026-09-01_w01_pre_rebuild_full_evaluation/baseline/CameraTrajectory_baseline.txt",
+        "adaptive_fallback": ROOT / "results/result/2026-09-01_w01_pre_rebuild_full_evaluation/adaptive_fallback/CameraTrajectory_semantic.txt",
+        "provisional": ROOT / "results/result/2026-09-04_w01_full_validation_fixed/provisional/CameraTrajectory_semantic.txt",
     }
     trajectories = {name: ev.trajectory_by_frame(path, timestamps, LAST)[0] for name, path in paths.items()}
     common = np.array(sorted(set.intersection(*(set(v) for v in trajectories.values()))), dtype=int)
@@ -37,7 +37,7 @@ def main():
         aligned[name] = transform[None, :, :] @ estimated
         errors[name] = ev.absolute_errors(aligned[name], gt)[0]
 
-    stats_path = ROOT / "results/result/w01_full_validation_fixed_2026-09-04/provisional/frame_stats_semantic.csv"
+    stats_path = ROOT / "results/result/2026-09-04_w01_full_validation_fixed/provisional/frame_stats_semantic.csv"
     stats = {int(row["index"]): row for row in csv.DictReader(stats_path.open())}
     selected = [i for i, frame in enumerate(common) if START <= frame <= END]
     plot_frames = common[selected]
