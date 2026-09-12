@@ -14,6 +14,7 @@
 - `v2_provisional_mappoint/`：临时候选 MapPoint 的晋升/淘汰与后端过滤。
 - `v2_1_provisional_ape_fix_2026-09-05/`：双目来源、观测去重、重投影记录及 provisional 闭环准入修复。
 - `v2_2_mixed_source_local_ba_candidate_2026-09-07/`：mixed 双目来源按关键帧聚合，并在 Local BA 中将 provisional 信息矩阵降为 0.25；4200 帧检查通过，但 9210 帧仍发生地图重建，仅作为诊断候选版。
+- `v2_3_geometric_promotion_candidate_2026-09-12/`：允许语义证据不足但几何观测稳定的 provisional 点晋升；单次 7254 帧实验改善 translation APE，但完整 9210 帧仍发生地图重建，仅作为精度改善候选版。
 - `v3_soft_selection/`：仅候选排序阶段的软语义权重（需在 v2 验收后启用）。
 
 完整 9210 帧重复实验使用 `scripts/run_w01_repeated_experiments.py`，聚合使用
