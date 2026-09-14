@@ -73,11 +73,6 @@ cd /root/workSLAM
 - FinnForest：至少 `W01_13Hz`，正式调参还需要 `S03/W03`；W01 是测试集，不能用于选阈值。
 - `AllGroundTruths_and_Calibration.zip`、`toolkit.zip` 和需要使用的 ROS bag 数据。
 
-当前实验权重已纳入 Git，SHA-256 为：
-
-```text
-727e6cb512dba9699f199f33aff11b66eb306ab198d696feece2b2377fb47e63
-```
 
 推荐目标位置：
 
