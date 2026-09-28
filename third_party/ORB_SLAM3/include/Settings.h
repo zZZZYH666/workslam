@@ -76,6 +76,17 @@ namespace ORB_SLAM3 {
         float staticFeatureWeight = 1.0f;
         float fallbackFeatureWeight = 0.4f;
         float minFeatureWeight = 0.10f;
+        // Diagnostic full-feature fallback for difficult-motion windows.
+        bool enableTurnFallback = false;
+        bool turnFallbackOnline = false;
+        int turnFallbackHoldFrames = 24;
+        int turnFallbackMinFrame = 1000;
+        int turnFallbackMinStaticFeatures = 50;
+        float turnFallbackMinGridCoverage = 0.10f;
+        int turnFallbackStartFrame = -1;
+        int turnFallbackEndFrame = -1;
+        // Maximum visual relocalization window before starting a new map.
+        float recoveryTimeoutSec = 3.0f;
 
         SemanticPromotionConfig promotionConfig() const {
             SemanticPromotionConfig c;

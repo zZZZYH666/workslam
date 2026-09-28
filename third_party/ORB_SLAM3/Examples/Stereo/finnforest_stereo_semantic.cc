@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -44,6 +45,14 @@ std::string FrameName(size_t index)
     name << std::setfill('0') << std::setw(6) << index << ".png";
     return name.str();
 }
+
+struct MapTrajectoryStats
+{
+    std::string filename;
+    size_t firstFrame = 0;
+    size_t lastFrame = 0;
+    size_t frameCount = 0;
+};
 }
 
 int main(int argc, char **argv)
@@ -72,12 +81,16 @@ int main(int argc, char **argv)
 
         std::ofstream timing(output + "/frame_times_semantic.csv");
         std::ofstream stats(output + "/frame_stats_semantic.csv");
+        std::ofstream mapManifest(output + "/trajectory_maps_semantic.csv");
+        std::map<unsigned long, std::ofstream> mapTrajectories;
+        std::map<unsigned long, MapTrajectoryStats> mapStats;
         std::ofstream lifecycle(output + "/semantic_lifecycle_events.csv");
         std::ofstream backend(output + "/backend_interval_stats.csv");
-        if(!timing || !stats || !lifecycle || !backend)
+        if(!timing || !stats || !mapManifest || !lifecycle || !backend)
             throw std::runtime_error("Cannot create result CSV files in: " + output);
         timing << "index,timestamp_ns,track_time_sec\n";
-        stats << "index,timestamp_ns,raw_left_features,raw_right_features,static_left_features,static_right_features,fallback_left_features,fallback_right_features,stereo_matches,grid_coverage,fallback_used,fallback_reason,tracking_inliers,tracking_state,left_static_pixels,right_static_pixels,track_time_ms,static_map_points,provisional_map_points,promoted_map_points,provisional_visible,provisional_matched,promotion_count,rejection_count\n";
+        stats << "index,timestamp_ns,raw_left_features,raw_right_features,static_left_features,static_right_features,fallback_left_features,fallback_right_features,stereo_matches,grid_coverage,fallback_used,turn_fallback_used,fallback_reason,tracking_inliers,tracking_state,left_static_pixels,right_static_pixels,track_time_ms,static_map_points,provisional_map_points,promoted_map_points,provisional_visible,provisional_matched,promotion_count,rejection_count\n";
+        mapManifest << "map_id,trajectory_file,first_frame,last_frame,frame_count\n";
         lifecycle << "frame_id,keyframe_id,map_id,map_point_id,old_state,new_state,reason,visible_frames,matched_frames,match_ratio,keyframe_observations,static_ratio,mean_reprojection_error,valid_reprojection_observations\n";
         backend << "frame_id,timestamp_ns,map_id,tracking_state,local_map_points,tracking_inliers,last_keyframe_id,atlas_maps,atlas_keyframes,atlas_points,active_provisional,promoted_points,rejected_points,loop_candidates,loop_matches,loop_trusted_inliers,loop_provisional_inliers\n";
 
@@ -107,7 +120,7 @@ int main(int argc, char **argv)
                 throw std::runtime_error("Invalid image/mask type or dimensions for frame " + name);
 
             const auto start = std::chrono::steady_clock::now();
-            slam.TrackStereo(left, right, timestamps[index].seconds, leftMask, rightMask);
+            const Sophus::SE3f Tcw = slam.TrackStereo(left, right, timestamps[index].seconds, leftMask, rightMask);
             const auto end = std::chrono::steady_clock::now();
             const double elapsed = std::chrono::duration<double>(end - start).count();
 
@@ -123,13 +136,42 @@ int main(int argc, char **argv)
                   << slam.GetSemanticStaticRightFeatures() << ',' << slam.GetSemanticFallbackFeatures() << ','
                   << slam.GetSemanticFallbackRightFeatures() << ','
                   << slam.GetSemanticStereoMatches() << ',' << std::fixed << std::setprecision(6) << slam.GetSemanticGridCoverage() << ','
-                  << (slam.SemanticFallbackUsed() ? 1 : 0) << ',' << slam.GetSemanticFallbackReason() << ',' << inliers << ','
+                  << (slam.SemanticFallbackUsed() ? 1 : 0) << ',' << (slam.SemanticTurnFallbackUsed() ? 1 : 0) << ',' << slam.GetSemanticFallbackReason() << ',' << inliers << ','
                   << slam.GetTrackingState() << ',' << cv::countNonZero(leftMask) << ',' << cv::countNonZero(rightMask) << ','
                   << std::fixed << std::setprecision(6) << elapsed * 1000.0 << ','
                   << slam.GetSemanticStaticMapPoints() << ',' << slam.GetSemanticProvisionalMapPoints() << ','
                   << slam.GetSemanticPromotedMapPoints() << ',' << slam.GetSemanticProvisionalVisible() << ','
                   << slam.GetSemanticProvisionalMatched() << ',' << slam.GetSemanticPromotionCount() << ','
                   << slam.GetSemanticRejectionCount() << '\n';
+
+            const int trackingState = slam.GetTrackingState();
+            const bool poseValid = (trackingState == 2 || trackingState == 5) && Tcw.matrix().allFinite();
+            const Sophus::SE3f Twc = Tcw.inverse();
+            const Eigen::Vector3f translation = Twc.translation();
+            const Eigen::Quaternionf quaternion = Twc.unit_quaternion();
+            const unsigned long mapId = slam.GetCurrentMapId();
+            std::ofstream &mapTrajectory = mapTrajectories[mapId];
+            if(!mapTrajectory.is_open())
+            {
+                const std::string filename = "trajectory_map_" + std::to_string(mapId) + "_semantic.csv";
+                mapTrajectory.open((output + "/" + filename).c_str());
+                if(!mapTrajectory)
+                    throw std::runtime_error("Cannot create map trajectory file: " + output + "/" + filename);
+                mapTrajectory << "frame,timestamp_ns,tracking_state,pose_valid,tx,ty,tz,qx,qy,qz,qw,map_id\n";
+                MapTrajectoryStats &trajectoryStats = mapStats[mapId];
+                trajectoryStats.filename = filename;
+                trajectoryStats.firstFrame = index;
+                trajectoryStats.lastFrame = index;
+                trajectoryStats.frameCount = 0;
+            }
+            mapTrajectory << index << ',' << timestamps[index].nanoseconds << ','
+                       << trackingState << ',' << (poseValid ? 1 : 0) << ','
+                       << std::fixed << std::setprecision(9) << translation.x() << ',' << translation.y() << ','
+                       << translation.z() << ',' << quaternion.x() << ',' << quaternion.y() << ','
+                       << quaternion.z() << ',' << quaternion.w() << ',' << mapId << '\n';
+            MapTrajectoryStats &trajectoryStats = mapStats[mapId];
+            trajectoryStats.lastFrame = index;
+            ++trajectoryStats.frameCount;
 
             const std::vector<ORB_SLAM3::MapPoint::SemanticLifecycleEvent> events = slam.GetSemanticLifecycleEventsSince(lifecycleCursor);
             for(const auto &event : events)
@@ -155,6 +197,14 @@ int main(int argc, char **argv)
         }
 
         slam.Shutdown();
+        for(std::map<unsigned long, std::ofstream>::iterator it = mapTrajectories.begin(); it != mapTrajectories.end(); ++it)
+            it->second.close();
+        for(std::map<unsigned long, MapTrajectoryStats>::const_iterator it = mapStats.begin(); it != mapStats.end(); ++it)
+        {
+            const MapTrajectoryStats &trajectoryStats = it->second;
+            mapManifest << it->first << ',' << trajectoryStats.filename << ',' << trajectoryStats.firstFrame << ','
+                        << trajectoryStats.lastFrame << ',' << trajectoryStats.frameCount << '\n';
+        }
         const std::vector<ORB_SLAM3::MapPoint::SemanticLifecycleEvent> finalEvents = slam.GetSemanticLifecycleEventsSince(lifecycleCursor);
         for(const auto &event : finalEvents)
         {

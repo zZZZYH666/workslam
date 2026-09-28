@@ -1426,6 +1426,11 @@ int System::GetSemanticFallbackReason() const
     return mpTracker ? mpTracker->mCurrentFrame.mnSemanticFallbackReason : 0;
 }
 
+bool System::SemanticTurnFallbackUsed() const
+{
+    return mpTracker && mpTracker->mCurrentFrame.mbTurnFallback;
+}
+
 int System::GetAtlasMapCount()
 {
     return mpAtlas ? mpAtlas->CountMaps() : 0;

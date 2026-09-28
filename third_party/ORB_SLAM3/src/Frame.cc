@@ -71,7 +71,7 @@ Frame::Frame(const Frame &frame)
      monoLeft(frame.monoLeft), monoRight(frame.monoRight), mvLeftToRightMatch(frame.mvLeftToRightMatch),
      mvRightToLeftMatch(frame.mvRightToLeftMatch), mvStereo3Dpoints(frame.mvStereo3Dpoints),
      mTlr(frame.mTlr), mRlr(frame.mRlr), mtlr(frame.mtlr), mTrl(frame.mTrl),
-     mTcw(frame.mTcw), mbHasPose(false), mbHasVelocity(false), mnStaticLeftFeatures(frame.mnStaticLeftFeatures), mnStaticRightFeatures(frame.mnStaticRightFeatures), mnFallbackLeftFeatures(frame.mnFallbackLeftFeatures), mnFallbackRightFeatures(frame.mnFallbackRightFeatures), mnStereoMatches(frame.mnStereoMatches), mnTrackingInliers(frame.mnTrackingInliers), mfLeftGridCoverage(frame.mfLeftGridCoverage), mfRightGridCoverage(frame.mfRightGridCoverage), mbSemanticFallback(frame.mbSemanticFallback), mnSemanticFallbackReason(frame.mnSemanticFallbackReason)
+     mTcw(frame.mTcw), mbHasPose(false), mbHasVelocity(false), mnStaticLeftFeatures(frame.mnStaticLeftFeatures), mnStaticRightFeatures(frame.mnStaticRightFeatures), mnFallbackLeftFeatures(frame.mnFallbackLeftFeatures), mnFallbackRightFeatures(frame.mnFallbackRightFeatures), mnStereoMatches(frame.mnStereoMatches), mnTrackingInliers(frame.mnTrackingInliers), mfLeftGridCoverage(frame.mfLeftGridCoverage), mfRightGridCoverage(frame.mfRightGridCoverage), mbSemanticFallback(frame.mbSemanticFallback), mnSemanticFallbackReason(frame.mnSemanticFallbackReason), mbTurnFallback(frame.mbTurnFallback), mnTurnFallbackAge(frame.mnTurnFallbackAge)
 {
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++){
@@ -131,25 +131,85 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     const std::vector<cv::KeyPoint> rawRightKeys = mvKeysRight;
     const cv::Mat rawLeftDescriptors = mDescriptors.clone();
     const cv::Mat rawRightDescriptors = mDescriptorsRight.clone();
+    const bool forcedTurnFallback = semanticConfig.enableTurnFallback &&
+        semanticConfig.turnFallbackStartFrame >= 0 &&
+        static_cast<int>(mnId) >= semanticConfig.turnFallbackStartFrame &&
+        (semanticConfig.turnFallbackEndFrame < 0 || static_cast<int>(mnId) <= semanticConfig.turnFallbackEndFrame);
+    bool fallbackRequested = false;
+    SemanticFallback::SelectionStats left;
+    SemanticFallback::SelectionStats right;
+    if(forcedTurnFallback)
+    {
+        mvKeys = rawLeftKeys;
+        mvKeysRight = rawRightKeys;
+        mDescriptors = rawLeftDescriptors;
+        mDescriptorsRight = rawRightDescriptors;
+        mvSemanticSource.assign(rawLeftKeys.size(), 1);
+        mvSemanticSourceRight.assign(rawRightKeys.size(), 1);
+        mvSemanticWeight.assign(rawLeftKeys.size(), 1.0f);
+        mvSemanticWeightRight.assign(rawRightKeys.size(), 1.0f);
+        mnStaticLeftFeatures = 0;
+        mnStaticRightFeatures = 0;
+        mnFallbackLeftFeatures = static_cast<int>(rawLeftKeys.size());
+        mnFallbackRightFeatures = static_cast<int>(rawRightKeys.size());
+        mfLeftGridCoverage = 1.0f;
+        mfRightGridCoverage = 1.0f;
+        mbSemanticFallback = true;
+        mnSemanticFallbackReason = 16;
+        mbTurnFallback = true;
+        mnTurnFallbackAge = 1;
+    }
+    else
+    {
     const bool previousMetricsLow = mnId > 0 && previousTrackingInliers < semanticConfig.minTrackingInliers;
     const SemanticFallback::SelectionStats leftStatic = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, semanticConfig, false, false, mvSemanticSource, &mvSemanticWeight);
     const SemanticFallback::SelectionStats rightStatic = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, semanticConfig, false, false, mvSemanticSourceRight, &mvSemanticWeightRight);
     const SemanticFallback::FallbackDecision fallbackDecision = SemanticFallback::EvaluateRequest(semanticConfig, leftStatic, rightStatic, previousMetricsLow);
-    bool fallbackRequested = fallbackDecision.requested;
+    const bool previousTurnFallback = pPrevF && pPrevF->mbTurnFallback &&
+        pPrevF->mnTurnFallbackAge < semanticConfig.turnFallbackHoldFrames;
+    const bool severeSemanticDrop = leftStatic.staticCount < semanticConfig.turnFallbackMinStaticFeatures ||
+        rightStatic.staticCount < semanticConfig.turnFallbackMinStaticFeatures ||
+        leftStatic.gridCoverage < semanticConfig.turnFallbackMinGridCoverage ||
+        rightStatic.gridCoverage < semanticConfig.turnFallbackMinGridCoverage;
+    const bool onlineTurnFallback = semanticConfig.enableTurnFallback && semanticConfig.turnFallbackOnline &&
+        static_cast<int>(mnId) >= semanticConfig.turnFallbackMinFrame &&
+        (severeSemanticDrop || previousMetricsLow || previousTurnFallback);
+    fallbackRequested = fallbackDecision.requested || onlineTurnFallback;
     mvKeys = rawLeftKeys;
     mvKeysRight = rawRightKeys;
     mDescriptors = rawLeftDescriptors;
     mDescriptorsRight = rawRightDescriptors;
-    SemanticFallback::SelectionStats left = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, semanticConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSource, &mvSemanticWeight);
-    SemanticFallback::SelectionStats right = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, semanticConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSourceRight, &mvSemanticWeightRight);
-    mnStaticLeftFeatures = left.selectedStaticCount;
-    mnStaticRightFeatures = right.selectedStaticCount;
-    mnFallbackLeftFeatures = left.fallbackCount;
-    mnFallbackRightFeatures = right.fallbackCount;
-    mfLeftGridCoverage = left.gridCoverage;
-    mfRightGridCoverage = right.gridCoverage;
-    mbSemanticFallback = fallbackRequested && (mnFallbackLeftFeatures > 0 || mnFallbackRightFeatures > 0);
-    mnSemanticFallbackReason = fallbackDecision.reason;
+    if(onlineTurnFallback)
+    {
+        mvSemanticSource.assign(rawLeftKeys.size(), 1);
+        mvSemanticSourceRight.assign(rawRightKeys.size(), 1);
+        mvSemanticWeight.assign(rawLeftKeys.size(), 1.0f);
+        mvSemanticWeightRight.assign(rawRightKeys.size(), 1.0f);
+        mnStaticLeftFeatures = 0;
+        mnStaticRightFeatures = 0;
+        mnFallbackLeftFeatures = static_cast<int>(rawLeftKeys.size());
+        mnFallbackRightFeatures = static_cast<int>(rawRightKeys.size());
+        mfLeftGridCoverage = 1.0f;
+        mfRightGridCoverage = 1.0f;
+        mbSemanticFallback = true;
+        mnSemanticFallbackReason = 16 | fallbackDecision.reason;
+        mbTurnFallback = true;
+        mnTurnFallbackAge = previousTurnFallback ? pPrevF->mnTurnFallbackAge + 1 : 1;
+    }
+    else
+    {
+        left = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, semanticConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSource, &mvSemanticWeight);
+        right = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, semanticConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSourceRight, &mvSemanticWeightRight);
+        mnStaticLeftFeatures = left.selectedStaticCount;
+        mnStaticRightFeatures = right.selectedStaticCount;
+        mnFallbackLeftFeatures = left.fallbackCount;
+        mnFallbackRightFeatures = right.fallbackCount;
+        mfLeftGridCoverage = left.gridCoverage;
+        mfRightGridCoverage = right.gridCoverage;
+        mbSemanticFallback = fallbackRequested && (mnFallbackLeftFeatures > 0 || mnFallbackRightFeatures > 0);
+        mnSemanticFallbackReason = fallbackDecision.reason;
+    }
+    }
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_EndExtORB = std::chrono::steady_clock::now();
 
@@ -169,7 +229,7 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     mnStereoMatches = 0;
     for(float depth : mvDepth)
         mnStereoMatches += depth > 0.0f ? 1 : 0;
-    if(SemanticFallback::ShouldRetryForStereo(semanticConfig, fallbackRequested, mnStereoMatches))
+    if(!forcedTurnFallback && SemanticFallback::ShouldRetryForStereo(semanticConfig, fallbackRequested, mnStereoMatches))
     {
         fallbackRequested = true;
         mnSemanticFallbackReason |= 8;

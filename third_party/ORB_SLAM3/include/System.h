@@ -193,6 +193,7 @@ public:
     float GetSemanticGridCoverage() const;
     bool SemanticFallbackUsed() const;
     int GetSemanticFallbackReason() const;
+    bool SemanticTurnFallbackUsed() const;
     int GetAtlasMapCount();
     long unsigned int GetAtlasKeyFrames();
     long unsigned int GetAtlasMapPoints();

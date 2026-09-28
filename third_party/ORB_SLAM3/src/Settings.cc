@@ -566,6 +566,24 @@ namespace ORB_SLAM3 {
         if(found) semanticConfig_.fallbackFeatureWeight = floatValue;
         floatValue = readParameter<float>(fSettings,"Semantic.MinFeatureWeight",found,false);
         if(found) semanticConfig_.minFeatureWeight = floatValue;
+        const int turnFallbackEnabled = readParameter<int>(fSettings,"Semantic.EnableTurnFallback",found,false);
+        if(found) semanticConfig_.enableTurnFallback = turnFallbackEnabled != 0;
+        const int turnFallbackOnline = readParameter<int>(fSettings,"Semantic.TurnFallbackOnline",found,false);
+        if(found) semanticConfig_.turnFallbackOnline = turnFallbackOnline != 0;
+        intValue = readParameter<int>(fSettings,"Semantic.TurnFallbackHoldFrames",found,false);
+        if(found) semanticConfig_.turnFallbackHoldFrames = intValue;
+        intValue = readParameter<int>(fSettings,"Semantic.TurnFallbackMinFrame",found,false);
+        if(found) semanticConfig_.turnFallbackMinFrame = intValue;
+        intValue = readParameter<int>(fSettings,"Semantic.TurnFallbackMinStaticFeatures",found,false);
+        if(found) semanticConfig_.turnFallbackMinStaticFeatures = intValue;
+        floatValue = readParameter<float>(fSettings,"Semantic.TurnFallbackMinGridCoverage",found,false);
+        if(found) semanticConfig_.turnFallbackMinGridCoverage = floatValue;
+        intValue = readParameter<int>(fSettings,"Semantic.TurnFallbackStartFrame",found,false);
+        if(found) semanticConfig_.turnFallbackStartFrame = intValue;
+        intValue = readParameter<int>(fSettings,"Semantic.TurnFallbackEndFrame",found,false);
+        if(found) semanticConfig_.turnFallbackEndFrame = intValue;
+        floatValue = readParameter<float>(fSettings,"Semantic.RecoveryTimeoutSec",found,false);
+        if(found) semanticConfig_.recoveryTimeoutSec = floatValue;
         semanticConfig_.targetFeatures = std::max(1, semanticConfig_.targetFeatures);
         semanticConfig_.minStaticFeatures = std::max(0, semanticConfig_.minStaticFeatures);
         semanticConfig_.minStereoMatches = std::max(0, semanticConfig_.minStereoMatches);
@@ -594,6 +612,11 @@ namespace ORB_SLAM3 {
         semanticConfig_.staticFeatureWeight = std::max(0.0f, semanticConfig_.staticFeatureWeight);
         semanticConfig_.fallbackFeatureWeight = std::max(0.0f, semanticConfig_.fallbackFeatureWeight);
         semanticConfig_.minFeatureWeight = std::max(0.0f, std::min(1.0f, semanticConfig_.minFeatureWeight));
+        semanticConfig_.recoveryTimeoutSec = std::max(0.5f, semanticConfig_.recoveryTimeoutSec);
+        semanticConfig_.turnFallbackHoldFrames = std::max(1, semanticConfig_.turnFallbackHoldFrames);
+        semanticConfig_.turnFallbackMinFrame = std::max(0, semanticConfig_.turnFallbackMinFrame);
+        semanticConfig_.turnFallbackMinStaticFeatures = std::max(0, semanticConfig_.turnFallbackMinStaticFeatures);
+        semanticConfig_.turnFallbackMinGridCoverage = std::max(0.0f, std::min(1.0f, semanticConfig_.turnFallbackMinGridCoverage));
         if(semanticConfig_.staticFeatureWeight < semanticConfig_.minFeatureWeight)
             semanticConfig_.staticFeatureWeight = semanticConfig_.minFeatureWeight;
         if(semanticConfig_.fallbackFeatureWeight < semanticConfig_.minFeatureWeight)

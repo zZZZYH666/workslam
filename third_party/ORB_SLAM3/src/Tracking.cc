@@ -1546,7 +1546,10 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
     //cout << "Incoming frame creation" << endl;
 
     if (mSensor == System::STEREO && !mpCamera2)
-        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,nullptr,IMU::Calib(),maskLeft,maskRight,mSemanticConfig,mnMatchesInliers);
+        // Pass the previous stereo frame so semantic turn fallback can hold
+        // across consecutive frames. The old nullptr silently disabled the
+        // hold-state branch for the non-IMU stereo pipeline.
+        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,IMU::Calib(),maskLeft,maskRight,mSemanticConfig,mnMatchesInliers);
     else if(mSensor == System::STEREO && mpCamera2)
         mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr);
     else if(mSensor == System::IMU_STEREO && !mpCamera2)
@@ -2059,7 +2062,7 @@ void Tracking::Track()
                         bOK = Relocalization();
                         //std::cout << "mCurrentFrame.mTimeStamp:" << to_string(mCurrentFrame.mTimeStamp) << std::endl;
                         //std::cout << "mTimeStampLost:" << to_string(mTimeStampLost) << std::endl;
-                        if(mCurrentFrame.mTimeStamp-mTimeStampLost>3.0f && !bOK)
+                        if(mCurrentFrame.mTimeStamp-mTimeStampLost>mSemanticConfig.recoveryTimeoutSec && !bOK)
                         {
                             mState = LOST;
                             Verbose::PrintMess("Track Lost...", Verbose::VERBOSITY_NORMAL);
@@ -2429,7 +2432,7 @@ void Tracking::StereoInitialization()
         KeyFrame* pKFini = new KeyFrame(mCurrentFrame,mpAtlas->GetCurrentMap(),mpKeyFrameDB);
 
         auto initializeSemanticMapPoint = [&](MapPoint* pMP, int leftIndex, int rightIndex = -1) {
-            if (!mSemanticConfig.enableMapPointPromotion || !pMP)
+            if (!mSemanticConfig.enableMapPointPromotion || mCurrentFrame.mbTurnFallback || !pMP)
                 return;
             const bool leftFallback = leftIndex >= 0 && leftIndex < static_cast<int>(mCurrentFrame.mvSemanticSource.size()) && mCurrentFrame.mvSemanticSource[leftIndex];
             const bool rightFallback = rightIndex >= 0 && rightIndex < static_cast<int>(mCurrentFrame.mvSemanticSourceRight.size()) && mCurrentFrame.mvSemanticSourceRight[rightIndex];
@@ -3420,6 +3423,8 @@ void Tracking::CreateNewKeyFrame()
 
                 if(bCreateNew)
                 {
+                    if(mCurrentFrame.mbTurnFallback)
+                        continue;
                     Eigen::Vector3f x3D;
 
                     if(mCurrentFrame.Nleft == -1){
@@ -3430,7 +3435,7 @@ void Tracking::CreateNewKeyFrame()
                     }
 
                     MapPoint* pNewMP = new MapPoint(x3D,pKF,mpAtlas->GetCurrentMap());
-                    if (mSemanticConfig.enableMapPointPromotion)
+                    if (mSemanticConfig.enableMapPointPromotion && !mCurrentFrame.mbTurnFallback)
                     {
                         const bool leftFallback = i < static_cast<int>(mCurrentFrame.mvSemanticSource.size()) && mCurrentFrame.mvSemanticSource[i];
                         const int rightIndex = (mCurrentFrame.Nleft != -1) ? mCurrentFrame.mvLeftToRightMatch[i] : -1;

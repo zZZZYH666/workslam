@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -43,6 +44,14 @@ std::string FrameName(size_t index)
     name << std::setfill('0') << std::setw(6) << index << ".png";
     return name.str();
 }
+
+struct MapTrajectoryStats
+{
+    std::string filename;
+    size_t firstFrame = 0;
+    size_t lastFrame = 0;
+    size_t frameCount = 0;
+};
 }
 
 int main(int argc, char **argv)
@@ -63,10 +72,14 @@ int main(int argc, char **argv)
 
         std::ofstream timing(output + "/frame_times_baseline.csv");
         std::ofstream stats(output + "/frame_stats_baseline.csv");
-        if(!timing || !stats)
+        std::ofstream mapManifest(output + "/trajectory_maps_baseline.csv");
+        std::map<unsigned long, std::ofstream> mapTrajectories;
+        std::map<unsigned long, MapTrajectoryStats> mapStats;
+        if(!timing || !stats || !mapManifest)
             throw std::runtime_error("Cannot create result CSV files in: " + output);
         timing << "index,timestamp_ns,track_time_sec\n";
         stats << "index,timestamp_ns,tracked_keypoints,tracking_inliers,tracking_state,track_time_ms\n";
+        mapManifest << "map_id,trajectory_file,first_frame,last_frame,frame_count\n";
 
         std::cout << "initializing SLAM" << std::endl;
         ORB_SLAM3::System slam(argv[1], argv[2], ORB_SLAM3::System::STEREO, false);
@@ -81,7 +94,7 @@ int main(int argc, char **argv)
                 throw std::runtime_error("Missing image for frame " + name);
 
             const auto start = std::chrono::steady_clock::now();
-            slam.TrackStereo(left, right, timestamps[index].seconds);
+            const Sophus::SE3f Tcw = slam.TrackStereo(left, right, timestamps[index].seconds);
             const auto end = std::chrono::steady_clock::now();
             const double elapsed = std::chrono::duration<double>(end - start).count();
 
@@ -95,11 +108,48 @@ int main(int argc, char **argv)
             stats << index << ',' << timestamps[index].nanoseconds << ',' << keys.size() << ',' << inliers << ','
                   << slam.GetTrackingState() << ',' << std::fixed << std::setprecision(6) << elapsed * 1000.0 << '\n';
 
+            const int trackingState = slam.GetTrackingState();
+            const bool poseValid = (trackingState == 2 || trackingState == 5) && Tcw.matrix().allFinite();
+            const Sophus::SE3f Twc = Tcw.inverse();
+            const Eigen::Vector3f translation = Twc.translation();
+            const Eigen::Quaternionf quaternion = Twc.unit_quaternion();
+            const unsigned long mapId = slam.GetCurrentMapId();
+            std::ofstream &mapTrajectory = mapTrajectories[mapId];
+            if(!mapTrajectory.is_open())
+            {
+                const std::string filename = "trajectory_map_" + std::to_string(mapId) + "_baseline.csv";
+                mapTrajectory.open((output + "/" + filename).c_str());
+                if(!mapTrajectory)
+                    throw std::runtime_error("Cannot create map trajectory file: " + output + "/" + filename);
+                mapTrajectory << "frame,timestamp_ns,tracking_state,pose_valid,tx,ty,tz,qx,qy,qz,qw,map_id\n";
+                MapTrajectoryStats &trajectoryStats = mapStats[mapId];
+                trajectoryStats.filename = filename;
+                trajectoryStats.firstFrame = index;
+                trajectoryStats.lastFrame = index;
+                trajectoryStats.frameCount = 0;
+            }
+            mapTrajectory << index << ',' << timestamps[index].nanoseconds << ','
+                       << trackingState << ',' << (poseValid ? 1 : 0) << ','
+                       << std::fixed << std::setprecision(9) << translation.x() << ',' << translation.y() << ','
+                       << translation.z() << ',' << quaternion.x() << ',' << quaternion.y() << ','
+                       << quaternion.z() << ',' << quaternion.w() << ',' << mapId << '\n';
+            MapTrajectoryStats &trajectoryStats = mapStats[mapId];
+            trajectoryStats.lastFrame = index;
+            ++trajectoryStats.frameCount;
+
             if((index + 1) % 100 == 0 || index + 1 == endIndex)
                 std::cout << "processed " << (index + 1) << '/' << endIndex << std::endl;
         }
 
         slam.Shutdown();
+        for(std::map<unsigned long, std::ofstream>::iterator it = mapTrajectories.begin(); it != mapTrajectories.end(); ++it)
+            it->second.close();
+        for(std::map<unsigned long, MapTrajectoryStats>::const_iterator it = mapStats.begin(); it != mapStats.end(); ++it)
+        {
+            const MapTrajectoryStats &trajectoryStats = it->second;
+            mapManifest << it->first << ',' << trajectoryStats.filename << ',' << trajectoryStats.firstFrame << ','
+                        << trajectoryStats.lastFrame << ',' << trajectoryStats.frameCount << '\n';
+        }
         std::ofstream summary(output + "/run_summary.csv");
         if(!summary)
             throw std::runtime_error("Cannot create run summary in: " + output);

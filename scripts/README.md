@@ -155,6 +155,36 @@ pytest -q tests/test_semantic_projection_sgbm.py
 - 右到左投影方向；
 - 融合时保留目标已有标签。
 
+多地图轨迹评估使用 [`evaluate_w01_multimap.py`](evaluate_w01_multimap.py)。
+它不会把不同地图的局部坐标直接拼接：只有同时提供 `frame,map_id` CSV 和
+`map_id -> 4x4` 全局变换 JSON 时才输出全局 APE/RPE；否则只输出分地图（或
+导出连续段）APE、同地图 RPE、覆盖率和连续段统计，并明确标记全局指标不可用。
+
+FinnForest stereo runner 会按地图分别保存每帧位姿，便于后续估计地图之间的坐标变换。
+文件名形如 `trajectory_map_<map_id>_baseline.csv` 或
+`trajectory_map_<map_id>_semantic.csv`，并分别提供
+`trajectory_maps_baseline.csv`、`trajectory_maps_semantic.csv` 作为文件索引。单个地图
+轨迹文件的列格式固定为：
+
+```text
+frame,timestamp_ns,tracking_state,pose_valid,tx,ty,tz,qx,qy,qz,qw,map_id
+```
+
+其中 `map_id` 是该帧当前地图的编号，位姿是该地图的局部坐标。即使文件已经按地图
+拆分，仍保留该列用于校验。若要计算跨地图的全局 APE/RPE，仍需额外提供每个地图
+到公共坐标系的 `map_id -> 4x4` 变换。
+
+评估时可以一次传入所有地图文件（shell 通配符会展开为多个参数）：
+
+```bash
+python scripts/evaluate_w01_multimap.py \
+  --trajectory-with-map results/run/trajectory_map_*_semantic.csv \
+  --groundtruth path/to/groundtruth.txt \
+  --timestamps path/to/timestamps.txt \
+  --last-frame 9209 \
+  --output results/run/analysis_multimap.json
+```
+
 ## 4. 当前正式实验
 
 当前完整实验的说明见：

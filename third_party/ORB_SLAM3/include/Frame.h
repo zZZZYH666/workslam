@@ -235,6 +235,8 @@ public:
     float mfRightGridCoverage = 0.0f;
     bool mbSemanticFallback = false;
     int mnSemanticFallbackReason = 0;
+    bool mbTurnFallback = false;
+    int mnTurnFallbackAge = 0;
 
     // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
     // In the stereo case, mvKeysUn is redundant as images must be rectified.
