@@ -51,6 +51,11 @@ static void InitSemanticState(MapPoint *p)
     p->mbSemanticHasLastVisibleFrame = false;
     p->mbSemanticHasLastMatchedFrame = false;
     p->mSemanticKeyFrameSourceMask.clear();
+    p->mSemanticObservationWindow.clear();
+    p->mfSemanticConfidence = 0.5f;
+    p->mnSemanticConfidenceFrame = 0;
+    p->mbSemanticConfidenceEnabled = false;
+    p->mfSemanticOptimizationMinWeight = 0.10f;
 }
 
 MapPoint::MapPoint():
@@ -620,6 +625,12 @@ void MapPoint::Promote(const std::string &reason)
         event.staticRatio = SemanticStaticRatio();
         event.meanReprojectionError = SemanticMeanReprojectionError();
         event.validReprojectionObservations = mnSemanticValidReprojectionObservations;
+        const SemanticTemporalStats temporal = GetSemanticTemporalStats(SemanticConfig());
+        event.semanticConsistency = temporal.semanticConsistency;
+        event.matchConsistency = temporal.matchConsistency;
+        event.geometricConsistency = temporal.geometricConsistency;
+        event.dynamicRatio = temporal.dynamicRatio;
+        event.confidence = mfSemanticConfidence;
         std::lock_guard<std::mutex> lock(mSemanticEventMutex);
         mSemanticLifecycleEvents.push_back(event);
     }
@@ -645,6 +656,12 @@ void MapPoint::Reject(const std::string &reason)
         event.staticRatio = SemanticStaticRatio();
         event.meanReprojectionError = SemanticMeanReprojectionError();
         event.validReprojectionObservations = mnSemanticValidReprojectionObservations;
+        const SemanticTemporalStats temporal = GetSemanticTemporalStats(SemanticConfig());
+        event.semanticConsistency = temporal.semanticConsistency;
+        event.matchConsistency = temporal.matchConsistency;
+        event.geometricConsistency = temporal.geometricConsistency;
+        event.dynamicRatio = temporal.dynamicRatio;
+        event.confidence = mfSemanticConfidence;
         std::lock_guard<std::mutex> lock(mSemanticEventMutex);
         mSemanticLifecycleEvents.push_back(event);
     }
@@ -707,6 +724,157 @@ void MapPoint::RegisterSemanticKeyFrameObservation(unsigned long keyframeId, boo
         ++mnSemanticStaticObservations;
     }
     sourceMask = static_cast<unsigned char>(sourceMask | sourceBit);
+}
+
+void MapPoint::RegisterSemanticObservation(const SemanticObservation &observation,
+                                           const SemanticConfig &config)
+{
+    if(!IsProvisional() || !config.enableTemporalObservationWindow) return;
+    {
+        std::lock_guard<std::mutex> lock(mSemanticEventMutex);
+        SemanticObservation *stored = NULL;
+        for(std::deque<SemanticObservation>::iterator it = mSemanticObservationWindow.begin();
+            it != mSemanticObservationWindow.end(); ++it)
+        {
+            if(it->frameId == observation.frameId)
+            {
+                stored = &(*it);
+                break;
+            }
+        }
+
+        if(!stored)
+        {
+            mSemanticObservationWindow.push_back(observation);
+            stored = &mSemanticObservationWindow.back();
+            if(stored->visible) ++mnSemanticVisibleFrames;
+            if(stored->inlier) ++mnSemanticMatchedFrames;
+            if(stored->dynamicEvidence) ++mnSemanticDynamicObservations;
+            if(stored->reprojectionValid && std::isfinite(stored->reprojectionError))
+            {
+                mfSemanticReprojectionErrorSum += std::max(0.0f, stored->reprojectionError);
+                ++mnSemanticValidReprojectionObservations;
+            }
+            if(stored->keyframeId != 0)
+                RegisterSemanticKeyFrameObservation(stored->keyframeId, stored->staticSource);
+        }
+        else
+        {
+            const bool wasVisible = stored->visible;
+            if(!stored->inlier && observation.inlier) ++mnSemanticMatchedFrames;
+            if(!stored->dynamicEvidence && observation.dynamicEvidence) ++mnSemanticDynamicObservations;
+            if(!stored->reprojectionValid && observation.reprojectionValid && std::isfinite(observation.reprojectionError))
+            {
+                stored->reprojectionValid = true;
+                stored->reprojectionError = std::max(0.0f, observation.reprojectionError);
+                mfSemanticReprojectionErrorSum += stored->reprojectionError;
+                ++mnSemanticValidReprojectionObservations;
+            }
+            stored->visible = stored->visible || observation.visible;
+            stored->inlier = stored->inlier || observation.inlier;
+            stored->staticSource = stored->staticSource || observation.staticSource;
+            stored->dynamicEvidence = stored->dynamicEvidence || observation.dynamicEvidence;
+            if(!wasVisible && stored->visible) ++mnSemanticVisibleFrames;
+            if(stored->keyframeId == 0 && observation.keyframeId != 0)
+            {
+                stored->keyframeId = observation.keyframeId;
+                RegisterSemanticKeyFrameObservation(stored->keyframeId, stored->staticSource);
+            }
+        }
+        while(mSemanticObservationWindow.size() > static_cast<size_t>(std::max(1, config.temporalWindowFrames)))
+            mSemanticObservationWindow.pop_front();
+        if(!mSemanticObservationWindow.empty())
+            mnSemanticLastFrameSeen = mSemanticObservationWindow.back().frameId;
+    }
+    if(config.enableTemporalConfidence)
+        UpdateSemanticConfidence(config);
+}
+
+MapPoint::SemanticTemporalStats MapPoint::GetSemanticTemporalStats(const SemanticConfig &config) const
+{
+    SemanticTemporalStats stats;
+    std::lock_guard<std::mutex> lock(mSemanticEventMutex);
+    if(mSemanticObservationWindow.empty())
+    {
+        stats.confidence = mfSemanticConfidence;
+        return stats;
+    }
+    double total = 0.0, visible = 0.0, matched = 0.0, geometry = 0.0, dynamic = 0.0;
+    double validGeometry = 0.0;
+    const double decay = std::max(0.0, std::min(1.0, static_cast<double>(config.temporalDecay)));
+    for(std::deque<SemanticObservation>::const_reverse_iterator it = mSemanticObservationWindow.rbegin();
+        it != mSemanticObservationWindow.rend(); ++it)
+    {
+        const size_t age = static_cast<size_t>(std::distance(mSemanticObservationWindow.rbegin(), it));
+        const double weight = std::pow(decay, static_cast<double>(age));
+        total += weight;
+        if(it->visible)
+        {
+            visible += weight;
+            if(it->inlier) matched += weight;
+            if(it->dynamicEvidence) dynamic += weight;
+        }
+        if(it->reprojectionValid && std::isfinite(it->reprojectionError))
+        {
+            geometry += weight * std::exp(-std::max(0.0f, it->reprojectionError) /
+                std::max(0.001f, config.confidenceReprojectionSigma));
+            validGeometry += weight;
+            ++stats.validReprojectionObservations;
+        }
+        if(it->visible) ++stats.visibleObservations;
+    }
+    stats.semanticConsistency = visible > 0.0 ? 0.0f : 0.0f;
+    if(visible > 0.0)
+    {
+        double staticWeight = 0.0;
+        for(std::deque<SemanticObservation>::const_reverse_iterator it = mSemanticObservationWindow.rbegin();
+            it != mSemanticObservationWindow.rend(); ++it)
+        {
+            const size_t age = static_cast<size_t>(std::distance(mSemanticObservationWindow.rbegin(), it));
+            if(it->visible && it->staticSource)
+                staticWeight += std::pow(decay, static_cast<double>(age));
+        }
+        stats.semanticConsistency = static_cast<float>(staticWeight / visible);
+        stats.matchConsistency = static_cast<float>(matched / visible);
+        stats.dynamicRatio = static_cast<float>(dynamic / visible);
+    }
+    stats.geometricConsistency = validGeometry > 0.0 ? static_cast<float>(geometry / validGeometry) : 0.5f;
+    stats.confidence = mfSemanticConfidence;
+    (void)total;
+    return stats;
+}
+
+void MapPoint::UpdateSemanticConfidence(const SemanticConfig &config)
+{
+    if(!IsProvisional()) return;
+    SemanticTemporalStats stats = GetSemanticTemporalStats(config);
+    const float evidence = std::max(0.0f, std::min(1.0f,
+        config.confidenceStaticWeight * stats.semanticConsistency +
+        config.confidenceMatchWeight * stats.matchConsistency +
+        config.confidenceGeometryWeight * stats.geometricConsistency -
+        config.confidenceDynamicWeight * stats.dynamicRatio));
+    std::lock_guard<std::mutex> lock(mSemanticEventMutex);
+    mfSemanticConfidence = config.enableTemporalConfidence ?
+        config.confidenceLambda * mfSemanticConfidence +
+        (1.0f - config.confidenceLambda) * evidence : 0.5f;
+    mfSemanticConfidence = std::max(0.0f, std::min(1.0f, mfSemanticConfidence));
+    mbSemanticConfidenceEnabled = config.localBAUseConfidence && config.enableTemporalConfidence;
+    mfSemanticOptimizationMinWeight = std::max(0.0f, std::min(1.0f, config.localBAMinWeight));
+    mnSemanticConfidenceFrame = mnSemanticLastFrameSeen;
+}
+
+float MapPoint::GetSemanticConfidence() const
+{
+    std::lock_guard<std::mutex> lock(mSemanticEventMutex);
+    return mfSemanticConfidence;
+}
+
+float MapPoint::GetSemanticOptimizationWeight() const
+{
+    std::lock_guard<std::mutex> lock(mSemanticEventMutex);
+    if(!IsProvisional()) return 1.0f;
+    if(!mbSemanticConfidenceEnabled) return 0.25f;
+    return std::max(mfSemanticOptimizationMinWeight, std::min(1.0f, mfSemanticConfidence));
 }
 
 float MapPoint::SemanticMatchRatio() const

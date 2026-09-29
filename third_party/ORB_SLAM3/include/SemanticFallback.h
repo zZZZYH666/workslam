@@ -37,6 +37,50 @@ struct FallbackDecision
     int reason = 0;
 };
 
+struct RiskEstimate
+{
+    float staticDeficit = 0.0f;
+    float coverageDeficit = 0.0f;
+    float inlierDeficit = 0.0f;
+    float risk = 0.0f;
+    float alpha = 0.0f;
+};
+
+inline float Clamp01(const float value)
+{
+    return std::max(0.0f, std::min(1.0f, value));
+}
+
+// The previous frame's activity is used for the decision. The current-frame
+// activity is updated after selection, avoiding a circular z_t -> alpha_t.
+inline RiskEstimate ComputeRisk(const SemanticConfig &config,
+                                const SelectionStats &left,
+                                const SelectionStats &right,
+                                const int previousTrackingInliers,
+                                const float previousFallbackActivity)
+{
+    RiskEstimate result;
+    const float target = static_cast<float>(std::max(1, config.targetFeatures));
+    const float inlierReference = static_cast<float>(std::max(1, config.minTrackingInliers * 2));
+    result.staticDeficit = Clamp01(1.0f -
+        static_cast<float>(std::min(left.staticCount, right.staticCount)) / target);
+    result.coverageDeficit = Clamp01(1.0f -
+        std::min(left.gridCoverage, right.gridCoverage));
+    result.inlierDeficit = Clamp01(1.0f -
+        static_cast<float>(std::max(0, previousTrackingInliers)) / inlierReference);
+
+    const float sum = config.riskWeightStatic + config.riskWeightCoverage +
+        config.riskWeightInlier + config.riskWeightHistory;
+    const float normalization = sum > 0.0f ? sum : 1.0f;
+    result.risk = Clamp01((config.riskWeightStatic * result.staticDeficit +
+        config.riskWeightCoverage * result.coverageDeficit +
+        config.riskWeightInlier * result.inlierDeficit +
+        config.riskWeightHistory * Clamp01(previousFallbackActivity)) / normalization);
+    result.alpha = Clamp01(config.fallbackRiskGain * result.risk);
+    result.alpha = std::min(result.alpha, Clamp01(config.maxFallbackRatio));
+    return result;
+}
+
 inline FallbackDecision EvaluateRequest(const SemanticConfig &config,
                                         const SelectionStats &left,
                                         const SelectionStats &right,
@@ -198,6 +242,58 @@ inline SelectionStats SelectFeatures(const cv::Mat &mask,
     keys.swap(filteredKeys);
     descriptors = filteredDescriptors;
     return stats;
+}
+
+// Enforce one Unknown budget across both stereo cameras after independent
+// selection. Static features are retained; only fallback features are removed.
+inline int TrimFallbackFeatures(const int maxFallback,
+                                std::vector<cv::KeyPoint> &keys,
+                                cv::Mat &descriptors,
+                                std::vector<unsigned char> &sources,
+                                std::vector<float> &weights)
+{
+    const int limit = std::max(0, maxFallback);
+    int fallbackSeen = 0;
+    for(unsigned char source : sources)
+        fallbackSeen += source != 0 ? 1 : 0;
+    if(fallbackSeen <= limit)
+        return 0;
+
+    std::vector<int> keep;
+    keep.reserve(keys.size() - static_cast<size_t>(fallbackSeen - limit));
+    int fallbackKept = 0;
+    for(size_t i = 0; i < keys.size(); ++i)
+    {
+        if(sources[i] != 0 && fallbackKept >= limit)
+            continue;
+        keep.push_back(static_cast<int>(i));
+        if(sources[i] != 0)
+            ++fallbackKept;
+    }
+
+    std::vector<cv::KeyPoint> filteredKeys;
+    cv::Mat filteredDescriptors;
+    std::vector<unsigned char> filteredSources;
+    std::vector<float> filteredWeights;
+    filteredKeys.reserve(keep.size());
+    filteredSources.reserve(keep.size());
+    filteredWeights.reserve(keep.size());
+    for(int index : keep)
+    {
+        filteredKeys.push_back(keys[static_cast<size_t>(index)]);
+        filteredDescriptors.push_back(descriptors.row(index));
+        filteredSources.push_back(sources[static_cast<size_t>(index)]);
+        if(weights.size() == sources.size())
+            filteredWeights.push_back(weights[static_cast<size_t>(index)]);
+    }
+    keys.swap(filteredKeys);
+    descriptors = filteredDescriptors;
+    sources.swap(filteredSources);
+    if(weights.size() == sources.size() + static_cast<size_t>(fallbackSeen - limit))
+        weights.swap(filteredWeights);
+    else if(!weights.empty())
+        weights.swap(filteredWeights);
+    return fallbackSeen - limit;
 }
 
 } // namespace SemanticFallback

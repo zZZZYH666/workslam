@@ -368,7 +368,13 @@ void LocalMapping::ProcessNewKeyFrame()
                 if (pMP->IsProvisional())
                 {
                     const bool staticObservation = KeyFrameSemanticSourceIsStatic(mpCurrentKeyFrame, static_cast<int>(i));
-                    pMP->RegisterSemanticKeyFrameObservation(mpCurrentKeyFrame->mnId, staticObservation);
+                    MapPoint::SemanticObservation observation;
+                    observation.frameId = static_cast<unsigned long>(mpCurrentKeyFrame->mnFrameId);
+                    observation.keyframeId = mpCurrentKeyFrame->mnId;
+                    observation.visible = true;
+                    observation.inlier = true;
+                    observation.staticSource = staticObservation;
+                    pMP->RegisterSemanticObservation(observation, mpTracker->GetSemanticConfig());
                 }
                 if(!pMP->IsInKeyFrame(mpCurrentKeyFrame))
                 {
@@ -419,6 +425,8 @@ void LocalMapping::MapPointCulling()
         if(pMP->isBad())
             lit = mlpRecentAddedMapPoints.erase(lit);
         else if(mpTracker && mpTracker->GetSemanticConfig().enableMapPointPromotion && pMP->IsProvisional() &&
+                (!mpTracker->GetSemanticConfig().enableTemporalConfidence ||
+                 pMP->GetSemanticConfidence() >= mpTracker->GetSemanticConfig().confidencePromoteThreshold) &&
                 (pMP->CanPromote(mpTracker->GetSemanticConfig().promotionConfig()) ||
                  (mpTracker->GetSemanticConfig().enableGeometricPromotion &&
                   pMP->CanPromote(mpTracker->GetSemanticConfig().geometricPromotionConfig()))))
@@ -428,12 +436,16 @@ void LocalMapping::MapPointCulling()
             lit = mlpRecentAddedMapPoints.erase(lit);
         }
         else if(mpTracker && mpTracker->GetSemanticConfig().enableMapPointPromotion && pMP->IsProvisional() &&
-                (pMP->ShouldReject(mpTracker->GetSemanticConfig().promotionConfig()) ||
+                ((mpTracker->GetSemanticConfig().enableTemporalConfidence &&
+                  pMP->GetSemanticConfidence() <= mpTracker->GetSemanticConfig().confidenceRejectThreshold) ||
+                 pMP->ShouldReject(mpTracker->GetSemanticConfig().promotionConfig()) ||
                  ((int)nCurrentKFid-(int)pMP->mnFirstKFid) >= mpTracker->GetSemanticConfig().provisionalMaxAgeKeyFrames))
         {
             const bool expired = ((int)nCurrentKFid-(int)pMP->mnFirstKFid) >= mpTracker->GetSemanticConfig().provisionalMaxAgeKeyFrames;
-            const std::string reason = pMP->SemanticDynamicObservations() > mpTracker->GetSemanticConfig().provisionalMaxDynamicObservations ?
-                "dynamic_limit" : (expired ? "expired" : "low_match_ratio");
+            const std::string reason = (mpTracker->GetSemanticConfig().enableTemporalConfidence &&
+                                        pMP->GetSemanticConfidence() <= mpTracker->GetSemanticConfig().confidenceRejectThreshold) ?
+                "confidence_low" : (pMP->SemanticDynamicObservations() > mpTracker->GetSemanticConfig().provisionalMaxDynamicObservations ?
+                "dynamic_limit" : (expired ? "expired" : "low_match_ratio"));
             pMP->Reject(reason);
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
@@ -773,9 +785,6 @@ void LocalMapping::CreateNewMapPoints()
                 pMP->SetSemanticState(SemanticMapPointState::PROVISIONAL);
                 const bool static1 = KeyFrameSemanticSourceIsStatic(mpCurrentKeyFrame, idx1);
                 const bool static2 = KeyFrameSemanticSourceIsStatic(pKF2, idx2);
-                pMP->RegisterSemanticVisibility(static_cast<long long>(mpCurrentKeyFrame->mnFrameId));
-                pMP->RegisterSemanticKeyFrameObservation(mpCurrentKeyFrame->mnId, static1);
-                pMP->RegisterSemanticKeyFrameObservation(pKF2->mnId, static2);
                 float reprojectionError = 0.0f;
                 bool reprojectionValid = ComputeKeyFrameReprojectionError(mpCurrentKeyFrame, idx1, x3D, reprojectionError);
                 float secondError = 0.0f;
@@ -785,9 +794,22 @@ void LocalMapping::CreateNewMapPoints()
                     reprojectionError = secondError;
                     reprojectionValid = true;
                 }
-                pMP->RegisterSemanticMatch(static1 || static2, reprojectionError,
-                                            reprojectionValid,
-                                            static_cast<long long>(mpCurrentKeyFrame->mnFrameId));
+                MapPoint::SemanticObservation observation;
+                observation.frameId = static_cast<unsigned long>(mpCurrentKeyFrame->mnFrameId);
+                observation.keyframeId = mpCurrentKeyFrame->mnId;
+                observation.visible = true;
+                observation.inlier = true;
+                observation.staticSource = static1 || static2;
+                observation.reprojectionValid = reprojectionValid;
+                observation.reprojectionError = reprojectionError;
+                pMP->RegisterSemanticObservation(observation, mpTracker->GetSemanticConfig());
+                if(pKF2->mnId != mpCurrentKeyFrame->mnId)
+                {
+                    observation.frameId = static_cast<unsigned long>(pKF2->mnFrameId);
+                    observation.keyframeId = pKF2->mnId;
+                    observation.staticSource = static2;
+                    pMP->RegisterSemanticObservation(observation, mpTracker->GetSemanticConfig());
+                }
             }
             if (bPointStereo)
                 countStereo++;

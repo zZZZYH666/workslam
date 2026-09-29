@@ -237,6 +237,12 @@ public:
     int mnSemanticFallbackReason = 0;
     bool mbTurnFallback = false;
     int mnTurnFallbackAge = 0;
+    // Temporal fallback diagnostics. Values remain zero when the feature is disabled.
+    float mfFallbackActivity = 0.0f;
+    float mfFallbackRisk = 0.0f;
+    float mfFallbackAlpha = 0.0f;
+    int mnFallbackBudget = 0;
+    int mnFallbackSelected = 0;
 
     // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
     // In the stereo case, mvKeysUn is redundant as images must be rectified.

@@ -76,6 +76,30 @@ namespace ORB_SLAM3 {
         float staticFeatureWeight = 1.0f;
         float fallbackFeatureWeight = 0.4f;
         float minFeatureWeight = 0.10f;
+        // Temporal confidence is deliberately opt-in so existing experiments
+        // remain bit-for-bit comparable with the fixed fallback baseline.
+        bool enableTemporalRisk = false;
+        bool enableTemporalObservationWindow = false;
+        bool enableTemporalConfidence = false;
+        float fallbackHistoryRho = 0.80f;
+        float riskWeightStatic = 0.30f;
+        float riskWeightCoverage = 0.25f;
+        float riskWeightInlier = 0.25f;
+        float riskWeightHistory = 0.20f;
+        float fallbackRiskGain = 1.0f;
+        int fallbackBudgetScope = 0; // 0=per-camera compatibility, 1=stereo shared
+        int temporalWindowFrames = 8;
+        float temporalDecay = 0.85f;
+        float confidenceLambda = 0.70f;
+        float confidenceStaticWeight = 0.35f;
+        float confidenceMatchWeight = 0.35f;
+        float confidenceGeometryWeight = 0.30f;
+        float confidenceDynamicWeight = 0.40f;
+        float confidencePromoteThreshold = 0.75f;
+        float confidenceRejectThreshold = 0.20f;
+        float confidenceReprojectionSigma = 2.0f;
+        bool localBAUseConfidence = false;
+        float localBAMinWeight = 0.10f;
         // Diagnostic full-feature fallback for difficult-motion windows.
         bool enableTurnFallback = false;
         bool turnFallbackOnline = false;

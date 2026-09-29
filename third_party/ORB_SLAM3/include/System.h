@@ -194,6 +194,11 @@ public:
     bool SemanticFallbackUsed() const;
     int GetSemanticFallbackReason() const;
     bool SemanticTurnFallbackUsed() const;
+    float GetSemanticFallbackActivity() const;
+    float GetSemanticFallbackRisk() const;
+    float GetSemanticFallbackAlpha() const;
+    int GetSemanticFallbackBudget() const;
+    int GetSemanticFallbackSelected() const;
     int GetAtlasMapCount();
     long unsigned int GetAtlasKeyFrames();
     long unsigned int GetAtlasMapPoints();

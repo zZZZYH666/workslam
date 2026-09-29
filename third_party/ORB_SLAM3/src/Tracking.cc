@@ -2438,11 +2438,6 @@ void Tracking::StereoInitialization()
             const bool rightFallback = rightIndex >= 0 && rightIndex < static_cast<int>(mCurrentFrame.mvSemanticSourceRight.size()) && mCurrentFrame.mvSemanticSourceRight[rightIndex];
             if (leftFallback || rightFallback) {
                 pMP->SetSemanticState(SemanticMapPointState::PROVISIONAL);
-                pMP->RegisterSemanticVisibility(static_cast<long long>(mCurrentFrame.mnId));
-                if(leftIndex >= 0)
-                    pMP->RegisterSemanticKeyFrameObservation(pKFini->mnId, !leftFallback);
-                if(rightIndex >= 0)
-                    pMP->RegisterSemanticKeyFrameObservation(pKFini->mnId, !rightFallback);
                 float reprojectionError = 0.0f;
                 bool reprojectionValid = false;
                 if(leftIndex >= 0)
@@ -2457,9 +2452,15 @@ void Tracking::StereoInitialization()
                         reprojectionValid = true;
                     }
                 }
-                pMP->RegisterSemanticMatch(!leftFallback || (rightIndex >= 0 && !rightFallback),
-                                            reprojectionError, reprojectionValid,
-                                            static_cast<long long>(mCurrentFrame.mnId));
+                MapPoint::SemanticObservation temporalObservation;
+                temporalObservation.frameId = mCurrentFrame.mnId;
+                temporalObservation.keyframeId = pKFini->mnId;
+                temporalObservation.visible = true;
+                temporalObservation.inlier = true;
+                temporalObservation.staticSource = !leftFallback || (rightIndex >= 0 && !rightFallback);
+                temporalObservation.reprojectionValid = reprojectionValid;
+                temporalObservation.reprojectionError = reprojectionError;
+                pMP->RegisterSemanticObservation(temporalObservation, mSemanticConfig);
             }
         };
 
@@ -3130,12 +3131,14 @@ bool Tracking::TrackLocalMap()
     {
         MapPoint* pSemanticMP = entry.first;
         const SemanticFrameObservation &observation = entry.second;
-        pSemanticMP->RegisterSemanticVisibility(static_cast<long long>(mCurrentFrame.mnId));
-        if(observation.matched)
-            pSemanticMP->RegisterSemanticMatch(observation.staticObservation,
-                                               observation.reprojectionError,
-                                               observation.reprojectionValid,
-                                               static_cast<long long>(mCurrentFrame.mnId));
+        MapPoint::SemanticObservation temporalObservation;
+        temporalObservation.frameId = mCurrentFrame.mnId;
+        temporalObservation.visible = true;
+        temporalObservation.inlier = observation.matched;
+        temporalObservation.staticSource = observation.staticObservation;
+        temporalObservation.reprojectionValid = observation.reprojectionValid;
+        temporalObservation.reprojectionError = observation.reprojectionError;
+        pSemanticMP->RegisterSemanticObservation(temporalObservation, mSemanticConfig);
     }
 
     for(int i=0; i<mCurrentFrame.N; i++)
@@ -3443,10 +3446,6 @@ void Tracking::CreateNewKeyFrame()
                         if (leftFallback || rightFallback)
                         {
                             pNewMP->SetSemanticState(SemanticMapPointState::PROVISIONAL);
-                            pNewMP->RegisterSemanticVisibility(static_cast<long long>(mCurrentFrame.mnId));
-                            pNewMP->RegisterSemanticKeyFrameObservation(pKF->mnId, !leftFallback);
-                            if(rightIndex >= 0)
-                                pNewMP->RegisterSemanticKeyFrameObservation(pKF->mnId, !rightFallback);
                             float reprojectionError = 0.0f;
                             bool reprojectionValid = ComputeSemanticReprojectionError(mCurrentFrame, i, pNewMP, reprojectionError);
                             if(rightIndex >= 0)
@@ -3459,9 +3458,15 @@ void Tracking::CreateNewKeyFrame()
                                     reprojectionValid = true;
                                 }
                             }
-                            pNewMP->RegisterSemanticMatch(!leftFallback || (rightIndex >= 0 && !rightFallback),
-                                                          reprojectionError, reprojectionValid,
-                                                          static_cast<long long>(mCurrentFrame.mnId));
+                            MapPoint::SemanticObservation temporalObservation;
+                            temporalObservation.frameId = mCurrentFrame.mnId;
+                            temporalObservation.keyframeId = pKF->mnId;
+                            temporalObservation.visible = true;
+                            temporalObservation.inlier = true;
+                            temporalObservation.staticSource = !leftFallback || (rightIndex >= 0 && !rightFallback);
+                            temporalObservation.reprojectionValid = reprojectionValid;
+                            temporalObservation.reprojectionError = reprojectionError;
+                            pNewMP->RegisterSemanticObservation(temporalObservation, mSemanticConfig);
                         }
                     }
                     pNewMP->AddObservation(pKF,i);
@@ -3543,7 +3548,12 @@ void Tracking::SearchLocalPoints()
         {
             pMP->IncreaseVisible();
             if(pMP->IsProvisional())
-                pMP->RegisterSemanticVisibility(static_cast<long long>(mCurrentFrame.mnId));
+            {
+                MapPoint::SemanticObservation temporalObservation;
+                temporalObservation.frameId = mCurrentFrame.mnId;
+                temporalObservation.visible = true;
+                pMP->RegisterSemanticObservation(temporalObservation, mSemanticConfig);
+            }
             nToMatch++;
         }
         if(pMP->mbTrackInView)

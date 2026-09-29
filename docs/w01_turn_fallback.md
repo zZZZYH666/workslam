@@ -98,7 +98,7 @@ taskset -c 0-7 third_party/ORB_SLAM3/Examples/Stereo/finnforest_stereo_semantic 
   data/W01_13Hz \
   results/2026-09-04_w01_semantic_projection_sgbm_full_masks/fused_masks \
   data/W01_13Hz/timestampSecNanoSec_W01.txt \
-  results/2026-09-28_w01_turn_fallback_online/full_9210/run_new 9210
+  results/2026-09-28_w01_experiments/turn_fallback_online/full_9210/run_new 9210
 ```
 
 Evaluate a single-map trajectory with:

@@ -54,10 +54,30 @@ Semantic.EnableSoftSelection: 0
 Semantic.StaticFeatureWeight: 1.0
 Semantic.FallbackFeatureWeight: 0.4
 Semantic.MinFeatureWeight: 0.10
-Semantic.EnableTemporalRisk: 0
+
+# Temporal fallback risk only (B ablation).
+Semantic.EnableTemporalRisk: 1
 Semantic.EnableTemporalObservationWindow: 0
 Semantic.EnableTemporalConfidence: 0
+Semantic.FallbackHistoryRho: 0.80
+Semantic.RiskWeightStatic: 0.30
+Semantic.RiskWeightCoverage: 0.25
+Semantic.RiskWeightInlier: 0.25
+Semantic.RiskWeightHistory: 0.20
+Semantic.FallbackRiskGain: 1.0
+Semantic.FallbackBudgetScope: 1
+Semantic.TemporalWindowFrames: 8
+Semantic.TemporalDecay: 0.85
+Semantic.ConfidenceLambda: 0.70
+Semantic.ConfidenceStaticWeight: 0.35
+Semantic.ConfidenceMatchWeight: 0.35
+Semantic.ConfidenceGeometryWeight: 0.30
+Semantic.ConfidenceDynamicWeight: 0.40
+Semantic.ConfidencePromoteThreshold: 0.75
+Semantic.ConfidenceRejectThreshold: 0.20
+Semantic.ConfidenceReprojectionSigma: 2.0
 Semantic.LocalBAUseConfidence: 0
+Semantic.LocalBAMinWeight: 0.10
 
 # Runtime trigger: previous weak tracking plus weak semantic support.
 Semantic.EnableTurnFallback: 1

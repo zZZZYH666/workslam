@@ -89,9 +89,9 @@ int main(int argc, char **argv)
         if(!timing || !stats || !mapManifest || !lifecycle || !backend)
             throw std::runtime_error("Cannot create result CSV files in: " + output);
         timing << "index,timestamp_ns,track_time_sec\n";
-        stats << "index,timestamp_ns,raw_left_features,raw_right_features,static_left_features,static_right_features,fallback_left_features,fallback_right_features,stereo_matches,grid_coverage,fallback_used,turn_fallback_used,fallback_reason,tracking_inliers,tracking_state,left_static_pixels,right_static_pixels,track_time_ms,static_map_points,provisional_map_points,promoted_map_points,provisional_visible,provisional_matched,promotion_count,rejection_count\n";
+        stats << "index,timestamp_ns,raw_left_features,raw_right_features,static_left_features,static_right_features,fallback_left_features,fallback_right_features,stereo_matches,grid_coverage,fallback_used,turn_fallback_used,fallback_reason,fallback_activity,fallback_risk,fallback_alpha,fallback_budget,fallback_selected,tracking_inliers,tracking_state,left_static_pixels,right_static_pixels,track_time_ms,static_map_points,provisional_map_points,promoted_map_points,provisional_visible,provisional_matched,promotion_count,rejection_count\n";
         mapManifest << "map_id,trajectory_file,first_frame,last_frame,frame_count\n";
-        lifecycle << "frame_id,keyframe_id,map_id,map_point_id,old_state,new_state,reason,visible_frames,matched_frames,match_ratio,keyframe_observations,static_ratio,mean_reprojection_error,valid_reprojection_observations\n";
+        lifecycle << "frame_id,keyframe_id,map_id,map_point_id,old_state,new_state,reason,visible_frames,matched_frames,match_ratio,keyframe_observations,static_ratio,mean_reprojection_error,valid_reprojection_observations,semantic_consistency,match_consistency,geometric_consistency,dynamic_ratio,confidence\n";
         backend << "frame_id,timestamp_ns,map_id,tracking_state,local_map_points,tracking_inliers,last_keyframe_id,atlas_maps,atlas_keyframes,atlas_points,active_provisional,promoted_points,rejected_points,loop_candidates,loop_matches,loop_trusted_inliers,loop_provisional_inliers\n";
 
         std::cout << "initializing SLAM" << std::endl;
@@ -136,7 +136,9 @@ int main(int argc, char **argv)
                   << slam.GetSemanticStaticRightFeatures() << ',' << slam.GetSemanticFallbackFeatures() << ','
                   << slam.GetSemanticFallbackRightFeatures() << ','
                   << slam.GetSemanticStereoMatches() << ',' << std::fixed << std::setprecision(6) << slam.GetSemanticGridCoverage() << ','
-                  << (slam.SemanticFallbackUsed() ? 1 : 0) << ',' << (slam.SemanticTurnFallbackUsed() ? 1 : 0) << ',' << slam.GetSemanticFallbackReason() << ',' << inliers << ','
+                  << (slam.SemanticFallbackUsed() ? 1 : 0) << ',' << (slam.SemanticTurnFallbackUsed() ? 1 : 0) << ',' << slam.GetSemanticFallbackReason() << ','
+                  << slam.GetSemanticFallbackActivity() << ',' << slam.GetSemanticFallbackRisk() << ',' << slam.GetSemanticFallbackAlpha() << ','
+                  << slam.GetSemanticFallbackBudget() << ',' << slam.GetSemanticFallbackSelected() << ',' << inliers << ','
                   << slam.GetTrackingState() << ',' << cv::countNonZero(leftMask) << ',' << cv::countNonZero(rightMask) << ','
                   << std::fixed << std::setprecision(6) << elapsed * 1000.0 << ','
                   << slam.GetSemanticStaticMapPoints() << ',' << slam.GetSemanticProvisionalMapPoints() << ','
@@ -180,7 +182,8 @@ int main(int argc, char **argv)
                           << event.oldState << ',' << event.newState << ',' << event.reason << ',' << event.visibleFrames << ','
                           << event.matchedFrames << ',' << std::fixed << std::setprecision(6) << event.matchRatio << ','
                           << event.keyframeObservations << ',' << event.staticRatio << ',' << event.meanReprojectionError << ','
-                          << event.validReprojectionObservations << '\n';
+                          << event.validReprojectionObservations << ',' << event.semanticConsistency << ',' << event.matchConsistency << ','
+                          << event.geometricConsistency << ',' << event.dynamicRatio << ',' << event.confidence << '\n';
             }
             lifecycleCursor += events.size();
 
@@ -212,7 +215,8 @@ int main(int argc, char **argv)
                       << event.oldState << ',' << event.newState << ',' << event.reason << ',' << event.visibleFrames << ','
                       << event.matchedFrames << ',' << std::fixed << std::setprecision(6) << event.matchRatio << ','
                       << event.keyframeObservations << ',' << event.staticRatio << ',' << event.meanReprojectionError << ','
-                      << event.validReprojectionObservations << '\n';
+                      << event.validReprojectionObservations << ',' << event.semanticConsistency << ',' << event.matchConsistency << ','
+                      << event.geometricConsistency << ',' << event.dynamicRatio << ',' << event.confidence << '\n';
         }
         lifecycleCursor += finalEvents.size();
         std::ofstream summary(output + "/run_summary.csv");

@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <deque>
 
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/array.hpp>
@@ -120,11 +121,36 @@ class MapPoint
         ar & mbSemanticHasLastVisibleFrame;
         ar & mbSemanticHasLastMatchedFrame;
         ar & mSemanticKeyFrameSourceMask;
+        ar & mfSemanticConfidence;
+        ar & mnSemanticConfidenceFrame;
 
     }
 
 
 public:
+    struct SemanticObservation
+    {
+        unsigned long frameId = 0;
+        unsigned long keyframeId = 0;
+        bool visible = false;
+        bool inlier = false;
+        bool staticSource = false;
+        bool dynamicEvidence = false;
+        bool reprojectionValid = false;
+        float reprojectionError = 0.0f;
+    };
+
+    struct SemanticTemporalStats
+    {
+        float semanticConsistency = 0.0f;
+        float matchConsistency = 0.0f;
+        float geometricConsistency = 0.0f;
+        float dynamicRatio = 0.0f;
+        float confidence = 0.0f;
+        int visibleObservations = 0;
+        int validReprojectionObservations = 0;
+    };
+
     struct SemanticLifecycleEvent
     {
         unsigned long frameId = 0;
@@ -141,6 +167,11 @@ public:
         float staticRatio = 0.0f;
         float meanReprojectionError = 0.0f;
         int validReprojectionObservations = 0;
+        float semanticConsistency = 0.0f;
+        float matchConsistency = 0.0f;
+        float geometricConsistency = 0.0f;
+        float dynamicRatio = 0.0f;
+        float confidence = 0.0f;
     };
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -206,6 +237,12 @@ public:
     void RegisterSemanticMatch(bool staticObservation, float reprojectionError,
                                bool reprojectionValid = false, long long frameId = -1);
     void RegisterSemanticKeyFrameObservation(unsigned long keyframeId, bool staticObservation);
+    void RegisterSemanticObservation(const SemanticObservation &observation,
+                                     const SemanticConfig &config);
+    void UpdateSemanticConfidence(const SemanticConfig &config);
+    SemanticTemporalStats GetSemanticTemporalStats(const SemanticConfig &config) const;
+    float GetSemanticConfidence() const;
+    float GetSemanticOptimizationWeight() const;
     bool CanPromote(const SemanticPromotionConfig &config) const;
     bool ShouldReject(const SemanticPromotionConfig &config) const;
     bool IsLoopEligible(const SemanticPromotionConfig &config, unsigned long currentKeyFrameId = 0) const;
@@ -290,6 +327,11 @@ public:
     bool mbSemanticHasLastVisibleFrame;
     bool mbSemanticHasLastMatchedFrame;
     std::map<unsigned long, unsigned char> mSemanticKeyFrameSourceMask;
+    std::deque<SemanticObservation> mSemanticObservationWindow;
+    float mfSemanticConfidence;
+    unsigned long mnSemanticConfidenceFrame;
+    bool mbSemanticConfidenceEnabled;
+    float mfSemanticOptimizationMinWeight;
 
     static std::mutex mSemanticEventMutex;
     static std::vector<SemanticLifecycleEvent> mSemanticLifecycleEvents;

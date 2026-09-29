@@ -71,7 +71,7 @@ Frame::Frame(const Frame &frame)
      monoLeft(frame.monoLeft), monoRight(frame.monoRight), mvLeftToRightMatch(frame.mvLeftToRightMatch),
      mvRightToLeftMatch(frame.mvRightToLeftMatch), mvStereo3Dpoints(frame.mvStereo3Dpoints),
      mTlr(frame.mTlr), mRlr(frame.mRlr), mtlr(frame.mtlr), mTrl(frame.mTrl),
-     mTcw(frame.mTcw), mbHasPose(false), mbHasVelocity(false), mnStaticLeftFeatures(frame.mnStaticLeftFeatures), mnStaticRightFeatures(frame.mnStaticRightFeatures), mnFallbackLeftFeatures(frame.mnFallbackLeftFeatures), mnFallbackRightFeatures(frame.mnFallbackRightFeatures), mnStereoMatches(frame.mnStereoMatches), mnTrackingInliers(frame.mnTrackingInliers), mfLeftGridCoverage(frame.mfLeftGridCoverage), mfRightGridCoverage(frame.mfRightGridCoverage), mbSemanticFallback(frame.mbSemanticFallback), mnSemanticFallbackReason(frame.mnSemanticFallbackReason), mbTurnFallback(frame.mbTurnFallback), mnTurnFallbackAge(frame.mnTurnFallbackAge)
+     mTcw(frame.mTcw), mbHasPose(false), mbHasVelocity(false), mnStaticLeftFeatures(frame.mnStaticLeftFeatures), mnStaticRightFeatures(frame.mnStaticRightFeatures), mnFallbackLeftFeatures(frame.mnFallbackLeftFeatures), mnFallbackRightFeatures(frame.mnFallbackRightFeatures), mnStereoMatches(frame.mnStereoMatches), mnTrackingInliers(frame.mnTrackingInliers), mfLeftGridCoverage(frame.mfLeftGridCoverage), mfRightGridCoverage(frame.mfRightGridCoverage), mbSemanticFallback(frame.mbSemanticFallback), mnSemanticFallbackReason(frame.mnSemanticFallbackReason), mbTurnFallback(frame.mbTurnFallback), mnTurnFallbackAge(frame.mnTurnFallbackAge), mfFallbackActivity(frame.mfFallbackActivity), mfFallbackRisk(frame.mfFallbackRisk), mfFallbackAlpha(frame.mfFallbackAlpha), mnFallbackBudget(frame.mnFallbackBudget), mnFallbackSelected(frame.mnFallbackSelected)
 {
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++){
@@ -138,6 +138,9 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     bool fallbackRequested = false;
     SemanticFallback::SelectionStats left;
     SemanticFallback::SelectionStats right;
+    const float previousFallbackActivity = (pPrevF && semanticConfig.enableTemporalRisk) ?
+        pPrevF->mfFallbackActivity : 0.0f;
+    SemanticFallback::RiskEstimate risk;
     if(forcedTurnFallback)
     {
         mvKeys = rawLeftKeys;
@@ -164,6 +167,10 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     const bool previousMetricsLow = mnId > 0 && previousTrackingInliers < semanticConfig.minTrackingInliers;
     const SemanticFallback::SelectionStats leftStatic = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, semanticConfig, false, false, mvSemanticSource, &mvSemanticWeight);
     const SemanticFallback::SelectionStats rightStatic = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, semanticConfig, false, false, mvSemanticSourceRight, &mvSemanticWeightRight);
+    risk = SemanticFallback::ComputeRisk(semanticConfig, leftStatic, rightStatic,
+                                         previousTrackingInliers, previousFallbackActivity);
+    mfFallbackRisk = risk.risk;
+    mfFallbackAlpha = risk.alpha;
     const SemanticFallback::FallbackDecision fallbackDecision = SemanticFallback::EvaluateRequest(semanticConfig, leftStatic, rightStatic, previousMetricsLow);
     const bool previousTurnFallback = pPrevF && pPrevF->mbTurnFallback &&
         pPrevF->mnTurnFallbackAge < semanticConfig.turnFallbackHoldFrames;
@@ -198,8 +205,24 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     }
     else
     {
-        left = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, semanticConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSource, &mvSemanticWeight);
-        right = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, semanticConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSourceRight, &mvSemanticWeightRight);
+        SemanticConfig selectionConfig = semanticConfig;
+        if(semanticConfig.enableTemporalRisk)
+            selectionConfig.maxFallbackRatio = risk.alpha;
+        left = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, selectionConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSource, &mvSemanticWeight);
+        right = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, selectionConfig, semanticConfig.enableFallback, fallbackRequested, mvSemanticSourceRight, &mvSemanticWeightRight);
+        if(semanticConfig.fallbackBudgetScope == 1 && fallbackRequested)
+        {
+            const int sharedLimit = static_cast<int>(std::floor(
+                selectionConfig.targetFeatures * selectionConfig.maxFallbackRatio));
+            const int leftLimit = std::min(left.fallbackCount, sharedLimit);
+            SemanticFallback::TrimFallbackFeatures(leftLimit, mvKeys, mDescriptors,
+                                                    mvSemanticSource, mvSemanticWeight);
+            const int rightLimit = std::min(right.fallbackCount, std::max(0, sharedLimit - leftLimit));
+            SemanticFallback::TrimFallbackFeatures(rightLimit, mvKeysRight, mDescriptorsRight,
+                                                    mvSemanticSourceRight, mvSemanticWeightRight);
+            left.fallbackCount = leftLimit;
+            right.fallbackCount = rightLimit;
+        }
         mnStaticLeftFeatures = left.selectedStaticCount;
         mnStaticRightFeatures = right.selectedStaticCount;
         mnFallbackLeftFeatures = left.fallbackCount;
@@ -210,6 +233,14 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
         mnSemanticFallbackReason = fallbackDecision.reason;
     }
     }
+    const bool fallbackObserved = mbSemanticFallback || mbTurnFallback;
+    if(semanticConfig.enableTemporalRisk)
+        mfFallbackActivity = semanticConfig.fallbackHistoryRho * previousFallbackActivity +
+            (1.0f - semanticConfig.fallbackHistoryRho) * (fallbackObserved ? 1.0f : 0.0f);
+    else
+        mfFallbackActivity = 0.0f;
+    mnFallbackBudget = mnFallbackLeftFeatures + mnFallbackRightFeatures;
+    mnFallbackSelected = mnFallbackBudget;
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_EndExtORB = std::chrono::steady_clock::now();
 
@@ -237,8 +268,24 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
         mvKeysRight = rawRightKeys;
         mDescriptors = rawLeftDescriptors;
         mDescriptorsRight = rawRightDescriptors;
-        left = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, semanticConfig, true, true, mvSemanticSource, &mvSemanticWeight);
-        right = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, semanticConfig, true, true, mvSemanticSourceRight, &mvSemanticWeightRight);
+        SemanticConfig retryConfig = semanticConfig;
+        if(semanticConfig.enableTemporalRisk)
+            retryConfig.maxFallbackRatio = risk.alpha;
+        left = SemanticFallback::SelectFeatures(maskLeft, mvKeys, mDescriptors, retryConfig, true, true, mvSemanticSource, &mvSemanticWeight);
+        right = SemanticFallback::SelectFeatures(maskRight, mvKeysRight, mDescriptorsRight, retryConfig, true, true, mvSemanticSourceRight, &mvSemanticWeightRight);
+        if(semanticConfig.fallbackBudgetScope == 1)
+        {
+            const int sharedLimit = static_cast<int>(std::floor(
+                retryConfig.targetFeatures * retryConfig.maxFallbackRatio));
+            const int leftLimit = std::min(left.fallbackCount, sharedLimit);
+            SemanticFallback::TrimFallbackFeatures(leftLimit, mvKeys, mDescriptors,
+                                                    mvSemanticSource, mvSemanticWeight);
+            const int rightLimit = std::min(right.fallbackCount, std::max(0, sharedLimit - leftLimit));
+            SemanticFallback::TrimFallbackFeatures(rightLimit, mvKeysRight, mDescriptorsRight,
+                                                    mvSemanticSourceRight, mvSemanticWeightRight);
+            left.fallbackCount = leftLimit;
+            right.fallbackCount = rightLimit;
+        }
         mnStaticLeftFeatures = left.selectedStaticCount;
         mnStaticRightFeatures = right.selectedStaticCount;
         mnFallbackLeftFeatures = left.fallbackCount;
@@ -253,6 +300,8 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
             for(float depth : mvDepth)
                 mnStereoMatches += depth > 0.0f ? 1 : 0;
         }
+        mnFallbackBudget = mnFallbackLeftFeatures + mnFallbackRightFeatures;
+        mnFallbackSelected = mnFallbackBudget;
     }
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_EndStereoMatches = std::chrono::steady_clock::now();

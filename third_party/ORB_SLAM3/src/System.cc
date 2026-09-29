@@ -1431,6 +1431,31 @@ bool System::SemanticTurnFallbackUsed() const
     return mpTracker && mpTracker->mCurrentFrame.mbTurnFallback;
 }
 
+float System::GetSemanticFallbackActivity() const
+{
+    return mpTracker ? mpTracker->mCurrentFrame.mfFallbackActivity : 0.0f;
+}
+
+float System::GetSemanticFallbackRisk() const
+{
+    return mpTracker ? mpTracker->mCurrentFrame.mfFallbackRisk : 0.0f;
+}
+
+float System::GetSemanticFallbackAlpha() const
+{
+    return mpTracker ? mpTracker->mCurrentFrame.mfFallbackAlpha : 0.0f;
+}
+
+int System::GetSemanticFallbackBudget() const
+{
+    return mpTracker ? mpTracker->mCurrentFrame.mnFallbackBudget : 0;
+}
+
+int System::GetSemanticFallbackSelected() const
+{
+    return mpTracker ? mpTracker->mCurrentFrame.mnFallbackSelected : 0;
+}
+
 int System::GetAtlasMapCount()
 {
     return mpAtlas ? mpAtlas->CountMaps() : 0;

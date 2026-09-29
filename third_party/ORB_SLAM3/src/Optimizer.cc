@@ -136,8 +136,18 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     for(size_t i=0; i<vpMP.size(); i++)
     {
         MapPoint* pMP = vpMP[i];
-        if(pMP->isBad() || pMP->IsProvisional())
+        if(pMP->isBad())
+        {
+            vbNotIncludedMP[i] = true;
             continue;
+        }
+        if(pMP->IsProvisional())
+        {
+            // Global BA admits only trusted points. Keep the recovery pass
+            // from looking up a vertex that was intentionally not created.
+            vbNotIncludedMP[i] = true;
+            continue;
+        }
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
         vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
         const int id = pMP->mnId+maxKFid+1;
@@ -378,6 +388,8 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         if(pMP->isBad())
             continue;
         g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId+maxKFid+1));
+        if(!vPoint)
+            continue;
 
         if(nLoopKF==pMap->GetOriginKF()->mnId)
         {
@@ -1291,7 +1303,7 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
         // geometry is less trusted than static-source points. Keep them in
         // local BA as soft constraints instead of letting them dominate the
         // pose update. Promoted/static points retain the original weight.
-        const double semanticInfoScale = pMP->IsProvisional() ? 0.25 : 1.0;
+        const double semanticInfoScale = pMP->GetSemanticOptimizationWeight();
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
         vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
         int id = pMP->mnId+maxKFid+1;
@@ -2090,7 +2102,7 @@ void Optimizer::OptimizeEssentialGraph(KeyFrame* pCurKF, vector<KeyFrame*> &vpFi
     // Correct points. Transform to "non-optimized" reference keyframe pose and transform back with optimized pose
     for(MapPoint* pMPi : vpNonCorrectedMPs)
     {
-        if(pMPi->isBad())
+        if(pMPi->isBad() || pMPi->GetSemanticState() == SemanticMapPointState::REJECTED)
             continue;
 
         KeyFrame* pRefKF = pMPi->GetReferenceKeyFrame();
@@ -3639,8 +3651,10 @@ void Optimizer::LocalBundleAdjustment(KeyFrame* pMainKF,vector<KeyFrame*> vpAdju
     for(unsigned int i=0; i < vpMPs.size(); ++i)
     {
         MapPoint* pMPi = vpMPs[i];
-        if(pMPi->isBad())
+        if(pMPi->isBad() || pMPi->GetSemanticState() == SemanticMapPointState::REJECTED)
             continue;
+
+        const double semanticInfoScale = pMPi->GetSemanticOptimizationWeight();
 
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
         vPoint->setEstimate(pMPi->GetWorldPos().cast<double>());
@@ -3675,7 +3689,7 @@ void Optimizer::LocalBundleAdjustment(KeyFrame* pMainKF,vector<KeyFrame*> vpAdju
                 e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnId)));
                 e->setMeasurement(obs);
                 const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];
-                e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);
+                e->setInformation(Eigen::Matrix2d::Identity()*invSigma2*semanticInfoScale);
 
                 g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
                 e->setRobustKernel(rk);
@@ -3704,7 +3718,7 @@ void Optimizer::LocalBundleAdjustment(KeyFrame* pMainKF,vector<KeyFrame*> vpAdju
                 e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnId)));
                 e->setMeasurement(obs);
                 const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];
-                Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2;
+                Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2*semanticInfoScale;
                 e->setInformation(Info);
 
                 g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
